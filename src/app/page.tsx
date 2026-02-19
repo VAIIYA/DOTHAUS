@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { RoomList } from "@/components/dashboard/RoomList";
+import { Leaderboard } from "@/components/dashboard/Leaderboard";
 import Link from "next/link";
 
 export default function Home() {
@@ -44,7 +45,14 @@ export default function Home() {
         </div>
       </div>
 
-      <RoomList />
+      <div className="max-w-7xl mx-auto px-6 pb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <RoomList />
+        </div>
+        <div>
+          <Leaderboard />
+        </div>
+      </div>
 
       {/* Grid Overlay */}
       <div

@@ -50,6 +50,7 @@ class GameRoom {
         this.players[socket.id] = {
             id: socket.id,
             name: playerData.name || "Guest",
+            walletAddress: playerData.walletAddress || null,
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
             x: Math.random() * MAP_WIDTH,
             y: Math.random() * MAP_HEIGHT,
@@ -118,6 +119,33 @@ class GameRoom {
                     const dy = player.y - other.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     if (dist < player.radius && player.mass > other.mass * 1.2) {
+                        // Report stat change to database
+                        const winnerWallet = player.walletAddress;
+                        const loserWallet = other.walletAddress;
+
+                        if (winnerWallet && loserWallet) {
+                            fetch(`http://${hostname}:${port}/api/game/stats`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    walletAddress: winnerWallet,
+                                    wins: 1,
+                                    totalEarnings: (room.price * 0.95), // House fee logic placeholder
+                                    secret: process.env.INTERNAL_API_SECRET
+                                })
+                            }).catch(console.error);
+
+                            fetch(`http://${hostname}:${port}/api/game/stats`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    walletAddress: loserWallet,
+                                    losses: 1,
+                                    secret: process.env.INTERNAL_API_SECRET
+                                })
+                            }).catch(console.error);
+                        }
+
                         // Reset other player
                         other.x = Math.random() * MAP_WIDTH;
                         other.y = Math.random() * MAP_HEIGHT;

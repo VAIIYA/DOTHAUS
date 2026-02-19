@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useEffect, useState } from "react";
+import { useAppState } from "@/lib/store";
 
 export const Navbar = () => {
     const [mounted, setMounted] = useState(false);
+    const state = useAppState();
 
     useEffect(() => {
         setMounted(true);
@@ -39,6 +41,16 @@ export const Navbar = () => {
 
                 {/* Wallet Connection */}
                 <div className="flex items-center gap-4">
+                    {mounted && state.user && (
+                        <div className="hidden sm:flex flex-col items-end mr-2">
+                            <span className="text-xs font-bold text-neon-blue uppercase tracking-tighter">
+                                {state.user.username}
+                            </span>
+                            <span className="text-[10px] text-starlight/50">
+                                {state.user.totalEarnings} USDC
+                            </span>
+                        </div>
+                    )}
                     <div className="relative">
                         {mounted && <WalletMultiButton style={{ backgroundColor: '#bc13fe', fontFamily: 'var(--font-inter)', fontWeight: 'bold' }} />}
                     </div>
