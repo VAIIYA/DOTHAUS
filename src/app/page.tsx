@@ -39,17 +39,17 @@ export default function Home() {
             </button>
           </Link>
 
-          <button className="px-8 py-4 border border-neon-blue/30 bg-deep-space/50 text-neon-blue font-bold text-xl uppercase tracking-wider hover:bg-neon-blue/10 transition-colors duration-200 backdrop-blur-md">
-            View Rooms
-          </button>
+          <Link href="#rooms">
+            <button className="px-8 py-4 border border-neon-blue/30 bg-deep-space/50 text-neon-blue font-bold text-xl uppercase tracking-wider hover:bg-neon-blue/10 transition-colors duration-200 backdrop-blur-md cursor-pointer">
+              View Rooms
+            </button>
+          </Link>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 pb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <RoomList />
-        </div>
-        <div>
+      <div className="pb-20 space-y-20">
+        <RoomList />
+        <div className="max-w-7xl mx-auto px-6">
           <Leaderboard />
         </div>
       </div>

@@ -28,7 +28,7 @@ export const Leaderboard = () => {
     if (loading) return <div className="text-starlight/50 animate-pulse">Loading rankings...</div>;
 
     return (
-        <div className="glass-panel p-6 rounded-2xl border border-white/5 bg-black/40 backdrop-blur-xl">
+        <div id="leaderboard" className="glass-panel p-6 rounded-2xl border border-white/5 bg-black/40 backdrop-blur-xl">
             <h2 className="text-xl font-black italic tracking-tighter text-white mb-6 flex items-center gap-2">
                 <span className="w-2 h-6 bg-neon-blue rounded-full shadow-[0_0_15px_#00f3ff]" />
                 TOP EARNERS
@@ -43,8 +43,8 @@ export const Leaderboard = () => {
                     >
                         <div className="flex items-center gap-4">
                             <span className={`text-lg font-black w-6 ${index === 0 ? 'text-neon-blue' :
-                                    index === 1 ? 'text-neon-purple' :
-                                        index === 2 ? 'text-neon-pink' : 'text-starlight/30'
+                                index === 1 ? 'text-neon-purple' :
+                                    index === 2 ? 'text-neon-pink' : 'text-starlight/30'
                                 }`}>
                                 #{index + 1}
                             </span>

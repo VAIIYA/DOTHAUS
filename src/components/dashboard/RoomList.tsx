@@ -26,7 +26,7 @@ export const RoomList = () => {
     };
 
     return (
-        <section id="rooms" className="py-20 px-6 relative z-10">
+        <section id="rooms" className="py-10 px-6 relative z-10">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-12 text-center">
                     <h2 className="text-4xl md:text-5xl font-black italic font-heading mb-4 text-white">
