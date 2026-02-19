@@ -1,0 +1,49 @@
+"use client";
+
+import Link from "next/link";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useEffect, useState } from "react";
+
+export const Navbar = () => {
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    return (
+        <nav className="fixed top-0 left-0 w-full z-50 glass-panel border-b border-white/10">
+            <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+                {/* Logo */}
+                <Link href="/" className="flex items-center gap-2 group">
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-neon-blue blur-lg opacity-40 group-hover:opacity-100 transition-opacity duration-300" />
+                        <span className="relative text-2xl font-black italic tracking-tighter text-white font-heading neon-text">
+                            SOLAR.IO
+                        </span>
+                    </div>
+                </Link>
+
+                {/* Navigation */}
+                <div className="hidden md:flex items-center gap-8">
+                    {["Play", "Rooms", "Leaderboard"].map((item) => (
+                        <Link
+                            key={item}
+                            href={`#${item.toLowerCase()}`}
+                            className="text-sm font-bold uppercase tracking-widest text-starlight/70 hover:text-neon-blue transition-colors duration-300"
+                        >
+                            {item}
+                        </Link>
+                    ))}
+                </div>
+
+                {/* Wallet Connection */}
+                <div className="flex items-center gap-4">
+                    <div className="relative">
+                        {mounted && <WalletMultiButton style={{ backgroundColor: '#bc13fe', fontFamily: 'var(--font-inter)', fontWeight: 'bold' }} />}
+                    </div>
+                </div>
+            </div>
+        </nav>
+    );
+};
