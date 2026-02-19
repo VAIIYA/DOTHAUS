@@ -21,7 +21,7 @@ export const Navbar = () => {
                     <div className="relative">
                         <div className="absolute inset-0 bg-neon-blue blur-lg opacity-40 group-hover:opacity-100 transition-opacity duration-300" />
                         <span className="relative text-2xl font-black italic tracking-tighter text-white font-heading neon-text">
-                            SOLAR.IO
+                            DOTHAUS
                         </span>
                     </div>
                 </Link>

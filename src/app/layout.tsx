@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Solar.io - Solana Agar Clone",
-  description: "Play, Earn, Dominate. The premium Agar.io clone on Solana.",
+  title: "DOTHAUS - Solana Battle Arena",
+  description: "Play, Earn, Dominate. The ultimate elimination arena on Solana.",
 };
 
 import { SolanaProvider } from "@/context/SolanaProvider";

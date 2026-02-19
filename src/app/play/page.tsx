@@ -25,7 +25,7 @@ function PlayContent() {
             {/* UI Overlay: Top Left Info */}
             <div className="absolute top-6 left-6 z-10 glass-panel p-4 rounded-xl border border-white/10">
                 <h2 className="text-xl font-bold text-white font-heading flex items-center gap-2">
-                    SOLAR.IO <span className="text-neon-blue text-[10px] bg-neon-blue/10 px-1.5 py-0.5 rounded border border-neon-blue/20">ELIMINATION</span>
+                    DOTHAUS <span className="text-neon-blue text-[10px] bg-neon-blue/10 px-1.5 py-0.5 rounded border border-neon-blue/20">ELIMINATION</span>
                 </h2>
                 <div className="mt-3 space-y-1">
                     <p className="text-xs text-starlight/60 uppercase tracking-widest font-bold">Room Pot</p>
