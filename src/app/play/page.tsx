@@ -1,4 +1,7 @@
+"use client";
+
 import { GameCanvas } from "@/components/game/GameCanvas";
+
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useEffect } from "react";
 import { GameState, INITIAL_STATE } from "@/lib/game/GameState";

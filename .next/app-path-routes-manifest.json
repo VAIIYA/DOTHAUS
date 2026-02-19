@@ -1,0 +1,10 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/game/stats/route": "/api/game/stats",
+  "/api/leaderboard/route": "/api/leaderboard",
+  "/api/user/route": "/api/user",
+  "/favicon.ico/route": "/favicon.ico",
+  "/page": "/",
+  "/play/page": "/play"
+}
