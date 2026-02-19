@@ -19,16 +19,33 @@ class GameRoom {
         this.id = id;
         this.price = price;
         this.maxPlayers = maxPlayers;
-        this.players = {};
+        this.players = {}; // Key: socket.id
         this.food = {};
-        this.status = "OPEN"; // OPEN, FULL, PLAYING, ENDED
-        this.initFood();
+        this.viruses = {};
+        this.ejectedMass = {};
+        this.status = "WAITING"; // WAITING, STARTING, ACTIVE, ENDED
+        this.countdown = 0;
+        this.winnerName = null;
+        this.initEntities();
     }
 
-    initFood() {
-        for (let i = 0; i < 100; i++) {
-            this.addFood();
-        }
+    initEntities() {
+        this.food = {};
+        this.viruses = {};
+        this.ejectedMass = {};
+        for (let i = 0; i < 100; i++) this.addFood();
+        for (let i = 0; i < 10; i++) this.addVirus();
+    }
+
+    addVirus() {
+        const id = `virus-${Date.now()}-${Math.random()}`;
+        this.viruses[id] = {
+            id,
+            x: Math.random() * MAP_WIDTH,
+            y: Math.random() * MAP_HEIGHT,
+            radius: 60,
+            mass: 100,
+        };
     }
 
     addFood() {
@@ -38,34 +55,66 @@ class GameRoom {
             x: Math.random() * MAP_WIDTH,
             y: Math.random() * MAP_HEIGHT,
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
-            radius: 5,
+            radius: 8, // Standard food radius
+            mass: 1,
         };
     }
 
     addPlayer(socket, playerData) {
-        if (Object.keys(this.players).length >= this.maxPlayers) {
-            return false;
+        if (this.status !== "WAITING" && this.status !== "STARTING") {
+            return { error: "MATCH_IN_PROGRESS" };
         }
 
+        if (Object.keys(this.players).length >= this.maxPlayers) {
+            return { error: "ROOM_FULL" };
+        }
+
+        // Initialize player with single fragment
         this.players[socket.id] = {
             id: socket.id,
-            name: playerData.name || "Guest",
+            name: playerData.name || "Player",
             walletAddress: playerData.walletAddress || null,
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
-            x: Math.random() * MAP_WIDTH,
-            y: Math.random() * MAP_HEIGHT,
-            radius: 20,
-            mass: 10,
-            target: { x: 0, y: 0 },
-            socket: socket, // Keep reference to socket if needed, but risky for serialization
+            fragments: [{
+                id: 0,
+                x: Math.random() * MAP_WIDTH,
+                y: Math.random() * MAP_HEIGHT,
+                mass: 10,
+                radius: 20,
+                vx: 0,
+                vy: 0,
+            }],
+            target: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+            socket: socket,
         };
 
-        if (Object.keys(this.players).length >= this.maxPlayers) {
-            this.status = "FULL";
-            // Maybe start countdown?
+        this.updatePlayerStats(socket.id);
+
+        if (Object.keys(this.players).length >= this.maxPlayers && this.status === "WAITING") {
+            this.startCountdown();
         }
 
         return this.players[socket.id];
+    }
+
+    startCountdown() {
+        this.status = "STARTING";
+        this.countdown = 10;
+        const timer = setInterval(() => {
+            if (this.countdown <= 0) {
+                clearInterval(timer);
+                this.startMatch();
+            }
+            this.countdown--;
+        }, 1000);
+    }
+
+    startMatch() {
+        if (Object.keys(this.players).length < 2) {
+            this.status = "WAITING";
+            return;
+        }
+        this.status = "ACTIVE";
     }
 
     removePlayer(socketId) {
@@ -77,101 +126,275 @@ class GameRoom {
 
     handleInput(socketId, inputData) {
         const player = this.players[socketId];
-        if (player) {
+        if (player && inputData) {
             player.target = inputData;
         }
     }
 
-    update() {
-        // Basic physics loop (same as before)
-        Object.values(this.players).forEach((player) => {
-            if (player.target) {
-                const dx = player.target.x - player.x;
-                const dy = player.target.y - player.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+    handleSplit(socketId) {
+        if (this.status !== "ACTIVE") return;
+        const player = this.players[socketId];
+        if (!player || player.fragments.length >= 16) return;
 
-                if (distance > 1) {
-                    const speed = 200 / player.radius;
-                    player.x += (dx / distance) * speed;
-                    player.y += (dy / distance) * speed;
-                    player.x = Math.max(0, Math.min(MAP_WIDTH, player.x));
-                    player.y = Math.max(0, Math.min(MAP_HEIGHT, player.y));
-                }
-            }
+        const newFragments = [];
+        player.fragments.forEach(frag => {
+            if (frag.mass >= 20) {
+                const halfMass = frag.mass / 2;
+                frag.mass = halfMass;
 
-            // Eat Food
-            Object.values(this.food).forEach((food) => {
-                const dx = player.x - food.x;
-                const dy = player.y - food.y;
+                // Direction to mouse
+                const dx = player.target.x - frag.x;
+                const dy = player.target.y - frag.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < player.radius) {
-                    delete this.food[food.id];
-                    player.mass += 1;
-                    player.radius = Math.sqrt(player.mass * 10);
-                    this.addFood(); // Immediate respawn
-                }
-            });
+                const vx = (dx / dist) * 15;
+                const vy = (dy / dist) * 15;
 
-            // Player Collision
-            Object.values(this.players).forEach((other) => {
-                if (player.id !== other.id) {
-                    const dx = player.x - other.x;
-                    const dy = player.y - other.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < player.radius && player.mass > other.mass * 1.2) {
-                        // Report stat change to database
-                        const winnerWallet = player.walletAddress;
-                        const loserWallet = other.walletAddress;
+                newFragments.push({
+                    id: Date.now() + Math.random(),
+                    x: frag.x,
+                    y: frag.y,
+                    mass: halfMass,
+                    radius: 0, // update stats will fix
+                    vx: vx,
+                    vy: vy,
+                    splitTime: Date.now()
+                });
+            }
+        });
+        player.fragments.push(...newFragments);
+        this.updatePlayerStats(socketId);
+    }
 
-                        if (winnerWallet && loserWallet) {
-                            fetch(`http://${hostname}:${port}/api/game/stats`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    walletAddress: winnerWallet,
-                                    wins: 1,
-                                    totalEarnings: (room.price * 0.95), // House fee logic placeholder
-                                    secret: process.env.INTERNAL_API_SECRET
-                                })
-                            }).catch(console.error);
+    handleEject(socketId) {
+        if (this.status !== "ACTIVE") return;
+        const player = this.players[socketId];
+        if (!player) return;
 
-                            fetch(`http://${hostname}:${port}/api/game/stats`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    walletAddress: loserWallet,
-                                    losses: 1,
-                                    secret: process.env.INTERNAL_API_SECRET
-                                })
-                            }).catch(console.error);
-                        }
+        player.fragments.forEach(frag => {
+            if (frag.mass > 25) {
+                frag.mass -= 15;
+                const dx = player.target.x - frag.x;
+                const dy = player.target.y - frag.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
 
-                        // Reset other player
-                        other.x = Math.random() * MAP_WIDTH;
-                        other.y = Math.random() * MAP_HEIGHT;
-                        other.mass = 10;
-                        other.radius = 20;
-                        player.mass += other.mass;
-                        player.radius = Math.sqrt(player.mass * 10);
-                    }
-                }
-            });
+                const id = `ejected-${Date.now()}-${Math.random()}`;
+                this.ejectedMass[id] = {
+                    id,
+                    x: frag.x + (dx / dist) * (frag.radius + 10),
+                    y: frag.y + (dy / dist) * (frag.radius + 10),
+                    vx: (dx / dist) * 20,
+                    vy: (dy / dist) * 20,
+                    color: player.color,
+                    mass: 10,
+                    radius: 10
+                };
+            }
+        });
+        this.updatePlayerStats(socketId);
+    }
+
+    updatePlayerStats(socketId) {
+        const player = this.players[socketId];
+        if (!player) return;
+
+        player.totalMass = 0;
+        player.fragments.forEach(frag => {
+            frag.radius = 12 + Math.sqrt(frag.mass) * 4;
+            player.totalMass += frag.mass;
         });
     }
 
+    update() {
+        const now = Date.now();
+        if (this.status === "WAITING" || this.status === "STARTING") return;
+
+        // Update Ejected Mass
+        Object.keys(this.ejectedMass).forEach(id => {
+            const em = this.ejectedMass[id];
+            em.x += em.vx;
+            em.y += em.vy;
+            em.vx *= 0.9;
+            em.vy *= 0.9;
+            if (em.x < 0 || em.x > MAP_WIDTH || em.y < 0 || em.y > MAP_HEIGHT) delete this.ejectedMass[id];
+        });
+
+        const playerList = Object.values(this.players);
+        playerList.forEach((player) => {
+            player.fragments.forEach((frag, idx) => {
+                // Physics
+                frag.x += frag.vx;
+                frag.y += frag.vy;
+                frag.vx *= 0.85;
+                frag.vy *= 0.85;
+
+                const dx = player.target.x - frag.x;
+                const dy = player.target.y - frag.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 1) {
+                    const speed = Math.max(1, 4 / Math.sqrt(frag.mass / 10));
+                    frag.x += (dx / distance) * speed;
+                    frag.y += (dy / distance) * speed;
+                }
+
+                // Bounds
+                frag.x = Math.max(0, Math.min(MAP_WIDTH, frag.x));
+                frag.y = Math.max(0, Math.min(MAP_HEIGHT, frag.y));
+
+                // Merge fragments
+                player.fragments.forEach((otherFrag, oIdx) => {
+                    if (idx !== oIdx) {
+                        const dist = Math.sqrt((frag.x - otherFrag.x) ** 2 + (frag.y - otherFrag.y) ** 2);
+                        const canMerge = (now - frag.splitTime > 30000) && (now - otherFrag.splitTime > 30000);
+                        if (dist < (frag.radius + otherFrag.radius) * 0.5 && canMerge) {
+                            frag.mass += otherFrag.mass;
+                            player.fragments.splice(oIdx, 1);
+                            this.updatePlayerStats(player.id);
+                        } else if (dist < frag.radius + otherFrag.radius) {
+                            // Separation force
+                            const angle = Math.atan2(otherFrag.y - frag.y, otherFrag.x - frag.x);
+                            const overlap = (frag.radius + otherFrag.radius) - dist;
+                            otherFrag.x += Math.cos(angle) * overlap * 0.1;
+                            otherFrag.y += Math.sin(angle) * overlap * 0.1;
+                        }
+                    }
+                });
+
+                // Eat Food
+                Object.values(this.food).forEach(f => {
+                    const dist = Math.sqrt((frag.x - f.x) ** 2 + (frag.y - f.y) ** 2);
+                    if (dist < frag.radius) {
+                        delete this.food[f.id];
+                        frag.mass += 1;
+                        this.updatePlayerStats(player.id);
+                        this.addFood();
+                    }
+                });
+
+                // Hit Virus
+                Object.values(this.viruses).forEach(v => {
+                    const dist = Math.sqrt((frag.x - v.x) ** 2 + (frag.y - v.y) ** 2);
+                    if (dist < frag.radius + v.radius && frag.mass > v.mass * 1.2) {
+                        this.explodePlayer(player.id, idx);
+                        delete this.viruses[v.id];
+                        this.addVirus();
+                    }
+                });
+
+                // Eat Players
+                playerList.forEach(otherPlayer => {
+                    if (player.id !== otherPlayer.id) {
+                        otherPlayer.fragments.forEach((otherFrag, oIdx) => {
+                            const dist = Math.sqrt((frag.x - otherFrag.x) ** 2 + (frag.y - otherFrag.y) ** 2);
+                            if (dist < frag.radius && frag.mass > otherFrag.mass * 1.15) {
+                                frag.mass += otherFrag.mass;
+                                otherPlayer.fragments.splice(oIdx, 1);
+                                this.updatePlayerStats(player.id);
+                                this.updatePlayerStats(otherPlayer.id);
+
+                                if (otherPlayer.fragments.length === 0) {
+                                    this.eliminatePlayer(otherPlayer.id, player.id);
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Decay
+            player.fragments.forEach(f => { if (f.mass > 20) f.mass -= f.mass * 0.0001; });
+            this.updatePlayerStats(player.id);
+        });
+
+        if (this.status === "ACTIVE" && Object.keys(this.players).length === 1) {
+            this.endMatch(Object.keys(this.players)[0]);
+        }
+    }
+
+    explodePlayer(userId, fragIdx) {
+        const player = this.players[userId];
+        const frag = player.fragments[fragIdx];
+        const pieces = 8;
+        const newMass = frag.mass / pieces;
+        frag.mass = newMass;
+        for (let i = 0; i < pieces - 1; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            player.fragments.push({
+                id: Math.random(),
+                x: frag.x,
+                y: frag.y,
+                mass: newMass,
+                vx: Math.cos(angle) * 10,
+                vy: Math.sin(angle) * 10,
+                splitTime: Date.now()
+            });
+        }
+        this.updatePlayerStats(userId);
+    }
+
+    eliminatePlayer(id, killerId) {
+        const player = this.players[id];
+        const killer = this.players[killerId];
+        console.log(`Player ${id} eliminated by ${killerId}`);
+        player.socket.emit("game-over", { winner: killer?.name });
+        delete this.players[id];
+
+        // Final report of stats
+        if (player.walletAddress) {
+            this.reportStats(player.walletAddress, 0, 1, 0);
+        }
+    }
+
+    endMatch(winnerId) {
+        this.status = "ENDED";
+        const winner = this.players[winnerId];
+        if (winner) {
+            this.winnerName = winner.name;
+            console.log(`Match won by ${winner.name}`);
+            winner.socket.emit("victory", { pot: this.price * 10 });
+            if (winner.walletAddress) {
+                this.reportStats(winner.walletAddress, 1, 0, this.price * 9.5); // 5% house fee
+            }
+        }
+        setTimeout(() => this.resetRoom(), 10000);
+    }
+
+    reportStats(wallet, wins, losses, earnings) {
+        fetch(`http://${hostname}:${port}/api/game/stats`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walletAddress: wallet, wins, losses, totalEarnings: earnings, secret: process.env.INTERNAL_API_SECRET })
+        }).catch(console.error);
+    }
+
+    resetRoom() {
+        this.players = {};
+        this.status = "WAITING";
+        this.initEntities();
+    }
+
     getState() {
-        // Return sanitized state (without socket objects)
         const playersClean = {};
         Object.values(this.players).forEach(p => {
-            playersClean[p.id] = { ...p, socket: undefined, target: undefined };
+            playersClean[p.id] = {
+                id: p.id,
+                name: p.name,
+                color: p.color,
+                fragments: p.fragments.map(f => ({ x: f.x, y: f.y, radius: f.radius, mass: f.mass })),
+                totalMass: p.totalMass
+            };
         });
 
         return {
             players: playersClean,
             food: this.food,
+            viruses: this.viruses,
+            ejectedMass: this.ejectedMass,
             mapWidth: MAP_WIDTH,
             mapHeight: MAP_HEIGHT,
-            status: this.status
+            status: this.status,
+            countdown: this.countdown,
+            winnerName: this.winnerName
         };
     }
 }
@@ -225,23 +448,37 @@ app.prepare().then(() => {
                 socket.leave(currentRoomId);
             }
 
-            const player = room.addPlayer(socket, playerData || {});
-            if (player) {
-                currentRoomId = roomId;
-                socket.join(roomId);
-                console.log(`Player ${socket.id} joined room ${roomId}`);
-
-                // Send initial state
-                socket.emit("game-state", room.getState());
-                socket.to(roomId).emit("player-joined", { ...player, socket: undefined });
-            } else {
-                socket.emit("error", "Room is full");
+            const result = room.addPlayer(socket, playerData || {});
+            if (result.error) {
+                socket.emit("error", result.error);
+                return;
             }
+
+            const player = result;
+            currentRoomId = roomId;
+            socket.join(roomId);
+            console.log(`Player ${socket.id} joined room ${roomId}`);
+
+            // Send initial state
+            socket.emit("game-state", room.getState());
+            socket.to(roomId).emit("player-joined", { ...player, socket: undefined });
         });
 
         socket.on("input", (inputData) => {
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleInput(socket.id, inputData);
+            }
+        });
+
+        socket.on("split", () => {
+            if (currentRoomId && rooms[currentRoomId]) {
+                rooms[currentRoomId].handleSplit(socket.id);
+            }
+        });
+
+        socket.on("eject", () => {
+            if (currentRoomId && rooms[currentRoomId]) {
+                rooms[currentRoomId].handleEject(socket.id);
             }
         });
 

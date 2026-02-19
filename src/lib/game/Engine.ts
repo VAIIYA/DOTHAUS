@@ -11,6 +11,7 @@ export class GameEngine {
 
     // Local player ID
     public myPlayerId: string | null = null;
+    public onStateUpdate: ((state: GameState) => void) | null = null;
 
     // Mouse Input
     private mousePos = { x: 0, y: 0 };
@@ -27,6 +28,7 @@ export class GameEngine {
 
         // Handle Input
         window.addEventListener("mousemove", this.onMouseMove);
+        window.addEventListener("keydown", this.onKeyDown);
 
         // Socket Listeners
         this.setupSocketListeners();
@@ -62,10 +64,12 @@ export class GameEngine {
         }
         window.removeEventListener("resize", this.handleResize);
         window.removeEventListener("mousemove", this.onMouseMove);
+        window.removeEventListener("keydown", this.onKeyDown);
     }
 
     public updateState(newState: Partial<GameState>) {
         this.state = { ...this.state, ...newState };
+        if (this.onStateUpdate) this.onStateUpdate(this.state);
     }
 
     public setMyPlayerId(id: string) {
@@ -78,34 +82,52 @@ export class GameEngine {
         this.animationId = requestAnimationFrame(this.loop);
     };
 
+    private onKeyDown = (e: KeyboardEvent) => {
+        if (e.code === "Space") {
+            this.socket.emit("split");
+        } else if (e.code === "KeyW") {
+            this.socket.emit("eject");
+        }
+    };
+
     private onMouseMove = (e: MouseEvent) => {
-        this.mousePos.x = e.clientX;
-        this.mousePos.y = e.clientY;
+        if (!this.myPlayerId || !this.state.players[this.myPlayerId]) return;
 
-        // Convert screen to world coordinates
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left - this.canvas.width / 2) / this.camera.scale + this.camera.x;
-        const y = (e.clientY - rect.top - this.canvas.height / 2) / this.camera.scale + this.camera.y;
+        const player = this.state.players[this.myPlayerId];
+        // For camera follow, we use the average position of fragments
+        let avgX = 0, avgY = 0;
+        player.fragments.forEach(f => { avgX += f.x; avgY += f.y; });
+        avgX /= player.fragments.length;
+        avgY /= player.fragments.length;
 
-        // Emit target (throttling can be added here)
+        const dx = e.clientX - this.canvas.width / 2;
+        const dy = e.clientY - this.canvas.height / 2;
+
+        const targetX = avgX + dx / this.camera.scale;
+        const targetY = avgY + dy / this.camera.scale;
+
         if (this.socket.connected) {
-            this.socket.emit("input", { x, y });
+            this.socket.emit("input", { x: targetX, y: targetY });
         }
     };
 
     private update() {
-        // Client-side prediction or interpolation can go here
-        // For now, we rely on state updates from server
-
-        // Update camera position to follow my player
         if (this.myPlayerId && this.state.players[this.myPlayerId]) {
             const player = this.state.players[this.myPlayerId];
-            // Smooth camera movement
-            this.camera.x += (player.x - this.camera.x) * 0.1;
-            this.camera.y += (player.y - this.camera.y) * 0.1;
 
-            // Dynamic zoom based on mass
-            const targetScale = Math.max(0.1, 1 / (player.radius / 50)); // Approximate zoom logic
+            let avgX = 0, avgY = 0, maxRadius = 0;
+            player.fragments.forEach(f => {
+                avgX += f.x;
+                avgY += f.y;
+                if (f.radius > maxRadius) maxRadius = f.radius;
+            });
+            avgX /= player.fragments.length;
+            avgY /= player.fragments.length;
+
+            this.camera.x += (avgX - this.camera.x) * 0.1;
+            this.camera.y += (avgY - this.camera.y) * 0.1;
+
+            const targetScale = Math.max(0.05, 0.8 / (maxRadius / 20));
             this.camera.scale += (targetScale - this.camera.scale) * 0.05;
         }
     }
@@ -138,8 +160,18 @@ export class GameEngine {
             this.drawCircle(food.x, food.y, food.radius, food.color);
         });
 
+        // Draw Ejected Mass
+        Object.values(this.state.ejectedMass).forEach((em) => {
+            this.drawCircle(em.x, em.y, em.radius, em.color);
+        });
+
+        // Draw Viruses
+        Object.values(this.state.viruses).forEach((v) => {
+            this.drawVirus(v.x, v.y, v.radius);
+        });
+
         // Draw Players
-        const sortedPlayers = Object.values(this.state.players).sort((a, b) => a.mass - b.mass);
+        const sortedPlayers = Object.values(this.state.players).sort((a, b) => (a.totalMass || 0) - (b.totalMass || 0));
         sortedPlayers.forEach((player) => {
             this.drawPlayer(player);
         });
@@ -172,26 +204,55 @@ export class GameEngine {
         this.ctx.fill();
     }
 
+    private drawVirus(x: number, y: number, radius: number) {
+        const { ctx } = this;
+        ctx.save();
+        ctx.fillStyle = "#33ff33"; // Green virus
+        ctx.strokeStyle = "#22aa22";
+        ctx.lineWidth = 4;
+
+        ctx.beginPath();
+        const spikes = 20;
+        for (let i = 0; i < spikes * 2; i++) {
+            const r = i % 2 === 0 ? radius : radius * 0.8;
+            const angle = (Math.PI * 2 * i) / (spikes * 2);
+            ctx.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
     private drawPlayer(player: Player) {
-        // Cell body
-        this.ctx.fillStyle = player.color;
-        this.ctx.beginPath();
-        this.ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-        this.ctx.fill();
+        player.fragments.forEach(frag => {
+            // Cell body
+            this.ctx.fillStyle = player.color;
+            this.ctx.beginPath();
+            this.ctx.arc(frag.x, frag.y, frag.radius, 0, Math.PI * 2);
+            this.ctx.fill();
 
-        // Cell Border (Neon Glow)
-        this.ctx.shadowBlur = 20;
-        this.ctx.shadowColor = player.color;
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-        this.ctx.lineWidth = 3;
-        this.ctx.stroke();
-        this.ctx.shadowBlur = 0;
+            // Cell Border (Neon Glow)
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = player.color;
+            this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+            this.ctx.shadowBlur = 0;
 
-        // Name
+            // Name on largest fragment
+        });
+
+        // Draw Name on the average position
+        let avgX = 0, avgY = 0;
+        player.fragments.forEach(f => { avgX += f.x; avgY += f.y; });
+        avgX /= player.fragments.length;
+        avgY /= player.fragments.length;
+
         this.ctx.fillStyle = "#ffffff";
-        this.ctx.font = `bold ${Math.max(12, player.radius / 3)}px "Orbitron", sans-serif`;
+        this.ctx.font = `bold 14px "Orbitron", sans-serif`;
         this.ctx.textAlign = "center";
         this.ctx.textBaseline = "middle";
-        this.ctx.fillText(player.name, player.x, player.y);
+        this.ctx.fillText(player.name, avgX, avgY);
     }
 }

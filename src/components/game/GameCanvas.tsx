@@ -4,12 +4,15 @@ import { useEffect, useRef } from "react";
 import { GameEngine } from "@/lib/game/Engine";
 import { INITIAL_STATE } from "@/lib/game/GameState";
 import { io, Socket } from "socket.io-client";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 interface GameCanvasProps {
     roomId: string;
+    onEngineReady?: (engine: GameEngine) => void;
 }
 
-export const GameCanvas = ({ roomId }: GameCanvasProps) => {
+export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
+    const { publicKey } = useWallet();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
     const socketRef = useRef<Socket | null>(null);
@@ -23,8 +26,16 @@ export const GameCanvas = ({ roomId }: GameCanvasProps) => {
 
         socket.on("connect", () => {
             console.log("Connected to server:", socket.id);
+            engine.setMyPlayerId(socket.id!);
+
             // Join game
-            socket.emit("join-room", { roomId, playerData: { name: "Guest" } });
+            socket.emit("join-room", {
+                roomId,
+                playerData: {
+                    name: "Player",
+                    walletAddress: publicKey?.toBase58() || null
+                }
+            });
         });
 
         // Initialize Engine
@@ -32,13 +43,7 @@ export const GameCanvas = ({ roomId }: GameCanvasProps) => {
         engineRef.current = engine;
         engine.start();
 
-        // Mock Data for testing (Remove later)
-        engine.updateState({
-            players: {
-                "me": { id: "me", name: "You", color: "#00f3ff", x: 1500, y: 1500, radius: 40, mass: 100, isSpectator: false },
-            }
-        });
-        engine.setMyPlayerId("me");
+        if (onEngineReady) onEngineReady(engine);
 
         return () => {
             engine.stop();
