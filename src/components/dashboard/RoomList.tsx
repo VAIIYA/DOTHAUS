@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 // Mock data for rooms
 const ROOMS = [
-    { id: "0", name: "PRACICE ARENA", price: 0, players: 12, maxPlayers: 50, status: "OPEN", isLobby: true },
+    { id: "0", name: "PRACTICE ARENA", price: 0, players: 12, maxPlayers: 50, status: "OPEN", isLobby: true },
     { id: "1", price: 0.1, players: 3, maxPlayers: 10, status: "OPEN" },
     { id: "2", price: 0.5, players: 8, maxPlayers: 10, status: "OPEN" },
     { id: "3", price: 1, players: 10, maxPlayers: 10, status: "FULL" },

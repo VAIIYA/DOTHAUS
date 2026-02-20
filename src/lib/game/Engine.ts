@@ -5,6 +5,9 @@ export class GameEngine {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private state: GameState;
+    private lastState: GameState;
+    private nextState: GameState | null = null;
+    private stateTime: number = 0;
     private socket: Socket;
     private animationId: number | null = null;
     private camera: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 };
@@ -20,6 +23,7 @@ export class GameEngine {
         this.canvas = canvas;
         this.ctx = canvas.getContext("2d")!;
         this.state = initialState;
+        this.lastState = initialState;
         this.socket = socket;
 
         // Handle resizing
@@ -36,13 +40,17 @@ export class GameEngine {
 
     private setupSocketListeners() {
         this.socket.on("game-state", (gameState: GameState) => {
-            // Interpolate or replace state
-            // For MVP, replace
-            this.updateState(gameState);
+            this.lastState = this.state;
+            this.nextState = gameState;
+            this.stateTime = performance.now();
+
+            // Still trigger update for UI observers
+            if (this.onStateUpdate) this.onStateUpdate(gameState);
         });
 
-        this.socket.on("player-joined", (player: Player) => {
-            console.log("Player joined:", player);
+        this.socket.on("game-over", (data: { winner: string, isLobby: boolean }) => {
+            console.log("Game Over:", data);
+            // Could trigger UI here, but mostly handled by state and PlayContent
         });
     }
 
@@ -67,11 +75,6 @@ export class GameEngine {
         window.removeEventListener("keydown", this.onKeyDown);
     }
 
-    public updateState(newState: Partial<GameState>) {
-        this.state = { ...this.state, ...newState };
-        if (this.onStateUpdate) this.onStateUpdate(this.state);
-    }
-
     public setMyPlayerId(id: string) {
         this.myPlayerId = id;
     }
@@ -94,7 +97,6 @@ export class GameEngine {
         if (!this.myPlayerId || !this.state.players[this.myPlayerId]) return;
 
         const player = this.state.players[this.myPlayerId];
-        // For camera follow, we use the average position of fragments
         let avgX = 0, avgY = 0;
         player.fragments.forEach(f => { avgX += f.x; avgY += f.y; });
         avgX /= player.fragments.length;
@@ -112,6 +114,16 @@ export class GameEngine {
     };
 
     private update() {
+        // Interpolate State
+        if (this.nextState) {
+            const now = performance.now();
+            const elapsed = now - this.stateTime;
+            const t = Math.min(1, elapsed / (1000 / 30)); // Assuming 30 FPS server updates
+
+            // Smoothly move between last known state and next state
+            this.interpolateState(t);
+        }
+
         if (this.myPlayerId && this.state.players[this.myPlayerId]) {
             const player = this.state.players[this.myPlayerId];
 
@@ -124,12 +136,45 @@ export class GameEngine {
             avgX /= player.fragments.length;
             avgY /= player.fragments.length;
 
-            this.camera.x += (avgX - this.camera.x) * 0.1;
-            this.camera.y += (avgY - this.camera.y) * 0.1;
+            this.camera.x += (avgX - this.camera.x) * 0.15; // Slightly faster camera
+            this.camera.y += (avgY - this.camera.y) * 0.15;
 
             const targetScale = Math.max(0.05, 0.8 / (maxRadius / 20));
             this.camera.scale += (targetScale - this.camera.scale) * 0.05;
         }
+    }
+
+    private interpolateState(t: number) {
+        if (!this.nextState) return;
+
+        // Simple linear interpolation for fragments
+        const interpolatedPlayers: Record<string, Player> = {};
+
+        Object.keys(this.nextState.players).forEach(id => {
+            const nextPlayer = this.nextState!.players[id];
+            const lastPlayer = this.lastState.players[id];
+
+            if (lastPlayer) {
+                interpolatedPlayers[id] = {
+                    ...nextPlayer,
+                    fragments: nextPlayer.fragments.map((nf, i) => {
+                        const lf = lastPlayer.fragments[i] || nf; // Fallback to nf if fragment count changed
+                        return {
+                            ...nf,
+                            x: lf.x + (nf.x - lf.x) * t,
+                            y: lf.y + (nf.y - lf.y) * t,
+                        };
+                    })
+                };
+            } else {
+                interpolatedPlayers[id] = nextPlayer;
+            }
+        });
+
+        this.state = {
+            ...this.nextState,
+            players: interpolatedPlayers
+        };
     }
 
     private draw() {
@@ -137,7 +182,7 @@ export class GameEngine {
         const { ctx } = this;
 
         // Clear screen
-        ctx.fillStyle = "#0a0a12"; // Deep space
+        ctx.fillStyle = "#02040a"; // Even deeper space
         ctx.fillRect(0, 0, width, height);
 
         ctx.save();
@@ -148,9 +193,9 @@ export class GameEngine {
         ctx.translate(-this.camera.x, -this.camera.y);
 
         // Draw Map Boundaries
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 5;
-        ctx.strokeRect(0, 0, this.state.mapWidth, this.state.mapHeight);
+        ctx.strokeStyle = "rgba(0, 243, 255, 0.2)";
+        ctx.lineWidth = 10;
+        ctx.strokeRect(-5, -5, this.state.mapWidth + 10, this.state.mapHeight + 10);
 
         // Draw Grid
         this.drawGrid();
@@ -180,9 +225,8 @@ export class GameEngine {
     }
 
     private drawGrid() {
-        // Draw a subtle grid
-        const step = 50;
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        const step = 100; // Larger grid
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
 
@@ -202,21 +246,34 @@ export class GameEngine {
         this.ctx.beginPath();
         this.ctx.arc(x, y, radius, 0, Math.PI * 2);
         this.ctx.fill();
+
+        // Add a highlight
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        this.ctx.beginPath();
+        this.ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.2, 0, Math.PI * 2);
+        this.ctx.fill();
     }
 
     private drawVirus(x: number, y: number, radius: number) {
         const { ctx } = this;
         ctx.save();
-        ctx.fillStyle = "#33ff33"; // Green virus
+
+        // Create pulsating effect
+        const pulse = 1 + Math.sin(performance.now() * 0.005) * 0.05;
+        const r = radius * pulse;
+
+        ctx.fillStyle = "rgba(51, 255, 51, 0.8)";
         ctx.strokeStyle = "#22aa22";
         ctx.lineWidth = 4;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#33ff33";
 
         ctx.beginPath();
-        const spikes = 20;
+        const spikes = 18;
         for (let i = 0; i < spikes * 2; i++) {
-            const r = i % 2 === 0 ? radius : radius * 0.8;
+            const currentR = i % 2 === 0 ? r : r * 0.85;
             const angle = (Math.PI * 2 * i) / (spikes * 2);
-            ctx.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
+            ctx.lineTo(x + Math.cos(angle) * currentR, y + Math.sin(angle) * currentR);
         }
         ctx.closePath();
         ctx.fill();
@@ -225,22 +282,37 @@ export class GameEngine {
     }
 
     private drawPlayer(player: Player) {
+        const { ctx } = this;
+        const isMe = player.id === this.myPlayerId;
+
         player.fragments.forEach(frag => {
-            // Cell body
-            this.ctx.fillStyle = player.color;
-            this.ctx.beginPath();
-            this.ctx.arc(frag.x, frag.y, frag.radius, 0, Math.PI * 2);
-            this.ctx.fill();
+            ctx.save();
 
-            // Cell Border (Neon Glow)
-            this.ctx.shadowBlur = 15;
-            this.ctx.shadowColor = player.color;
-            this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-            this.ctx.shadowBlur = 0;
+            // Cell Body Gradient
+            const gradient = ctx.createRadialGradient(frag.x, frag.y, 0, frag.x, frag.y, frag.radius);
+            gradient.addColorStop(0, player.color);
+            gradient.addColorStop(1, this.shadeColor(player.color, -20));
 
-            // Name on largest fragment
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(frag.x, frag.y, frag.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Neon Border
+            ctx.shadowBlur = isMe ? 25 : 15;
+            ctx.shadowColor = player.color;
+            ctx.strokeStyle = isMe ? "rgba(255, 255, 255, 0.8)" : "rgba(255, 255, 255, 0.3)";
+            ctx.lineWidth = isMe ? 4 : 2;
+            ctx.stroke();
+
+            // Interior Glow
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = frag.radius * 0.1;
+            ctx.beginPath();
+            ctx.arc(frag.x, frag.y, frag.radius * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
         });
 
         // Draw Name on the average position
@@ -249,10 +321,29 @@ export class GameEngine {
         avgX /= player.fragments.length;
         avgY /= player.fragments.length;
 
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.font = `bold 14px "Orbitron", sans-serif`;
-        this.ctx.textAlign = "center";
-        this.ctx.textBaseline = "middle";
-        this.ctx.fillText(player.name, avgX, avgY);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${Math.max(12, 14)}px "Orbitron", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = "black";
+        ctx.fillText(player.name, avgX, avgY);
+        ctx.shadowBlur = 0;
+    }
+
+    private shadeColor(color: string, percent: number) {
+        // Simple HSL or Hex shade would be better, but assuming hsl(...) format here
+        if (color.startsWith('hsl')) {
+            const match = color.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+            if (match) {
+                const h = match[1];
+                const s = match[2];
+                let l = parseInt(match[3]);
+                l = Math.max(0, Math.min(100, l + percent));
+                return `hsl(${h}, ${s}%, ${l}%)`;
+            }
+        }
+        return color;
     }
 }
+

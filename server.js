@@ -96,13 +96,12 @@ class GameRoom {
 
         this.updatePlayerStats(socket.id);
 
-        // If it's a lobby, set status to ACTIVE immediately if it's not already
+        // If it's a lobby, set status to ACTIVE immediately
         if (this.id === "0") {
             this.status = "ACTIVE";
         } else if (Object.keys(this.players).length >= this.maxPlayers && this.status === "WAITING") {
             this.startCountdown();
         } else if (Object.keys(this.players).length >= 2 && this.status === "WAITING") {
-            // Start countdown even with 2 players to avoid waiting too long
             this.startCountdown();
         }
 
@@ -357,9 +356,20 @@ class GameRoom {
     eliminatePlayer(id, killerId) {
         const player = this.players[id];
         const killer = this.players[killerId];
+        if (!player) return;
+
         console.log(`Player ${id} eliminated by ${killerId}`);
-        player.socket.emit("game-over", { winner: killer?.name });
-        delete this.players[id];
+        player.socket.emit("game-over", { winner: killer?.name, isLobby: this.id === "0" });
+
+        if (this.id === "0") {
+            // Respawn in lobby after a short delay
+            setTimeout(() => {
+                if (this.players[id]) return; // Already re-joined?
+                this.addPlayer(player.socket, { name: player.name, walletAddress: player.walletAddress });
+            }, 2000);
+        } else {
+            delete this.players[id];
+        }
 
         // Final report of stats
         if (player.walletAddress) {
@@ -396,7 +406,7 @@ class GameRoom {
                 id: p.id,
                 name: p.name,
                 color: p.color,
-                fragments: p.fragments.map(f => ({ x: f.x, y: f.y, radius: f.radius, mass: f.mass })),
+                fragments: p.fragments.map(f => ({ id: f.id, x: f.x, y: f.y, radius: f.radius, mass: f.mass })),
                 totalMass: p.totalMass
             };
         });
