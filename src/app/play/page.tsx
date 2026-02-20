@@ -3,23 +3,42 @@
 import { GameCanvas } from "@/components/game/GameCanvas";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import { GameState, INITIAL_STATE } from "@/lib/game/GameState";
 
 function PlayContent() {
     const searchParams = useSearchParams();
     const roomId = searchParams.get("room") || "1";
     const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
+    const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
 
     const isLobby = roomId === "0";
     const playersCount = Object.keys(gameState.players).length;
+    const roomPriceById: Record<string, number> = {
+        "0": 0,
+        "1": 0.1,
+        "2": 0.5,
+        "3": 1,
+        "4": 2,
+        "5": 5,
+        "6": 10,
+        "7": 25,
+        "8": 50,
+    };
+    const roomPrice = roomPriceById[roomId] ?? 0.1;
+    const totalPot = playersCount * roomPrice;
+    const winnerPayout = totalPot * 0.95;
+    const amIWinner = !!myPlayerId && gameState.winnerName === gameState.players[myPlayerId]?.name;
 
     return (
         <div className="w-screen h-screen overflow-hidden bg-deep-space relative font-sans">
             <GameCanvas
                 roomId={roomId}
                 onEngineReady={(engine) => {
-                    engine.onStateUpdate = (state) => setGameState({ ...state });
+                    engine.onStateUpdate = (state) => {
+                        setGameState({ ...state });
+                        setMyPlayerId(engine.myPlayerId);
+                    };
                 }}
             />
 
@@ -39,7 +58,7 @@ function PlayContent() {
                             <span className="text-plasma-purple">FREE PLAY</span>
                         ) : (
                             <>
-                                {(playersCount * 0.1).toFixed(2)} <span className="text-xs text-neon-blue not-italic ml-1">USDC</span>
+                                {totalPot.toFixed(2)} <span className="text-xs text-neon-blue not-italic ml-1">USDC</span>
                             </>
                         )}
                     </p>
@@ -69,14 +88,14 @@ function PlayContent() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center glass-panel p-16 rounded-[2.5rem] border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
                     <h2 className="text-xs text-neon-blue uppercase tracking-[0.5em] font-black mb-4">Match Complete</h2>
                     <h1 className="text-6xl font-black text-white font-heading mb-4 italic tracking-tighter uppercase">
-                        {gameState.winnerName === gameState.players[gameState.winnerName || '']?.name ? 'Victory' : 'Game Over'}
+                        {amIWinner ? 'Victory' : 'Game Over'}
                     </h1>
                     <p className="text-starlight/60 text-lg mb-10 uppercase tracking-[0.2em] font-bold">
                         Winner: <span className="text-white">{gameState.winnerName || 'Unknown'}</span>
                     </p>
                     <div className="p-8 bg-white/5 rounded-2xl border border-white/10 mb-10 px-16">
                         <p className="text-xs text-starlight/50 mb-2 uppercase tracking-widest font-black">Total Pot Payout</p>
-                        <p className="text-4xl font-black text-neon-blue italic">{(playersCount * 0.1 * 0.95).toFixed(2)} <span className="text-sm not-italic ml-1">USDC</span></p>
+                        <p className="text-4xl font-black text-neon-blue italic">{winnerPayout.toFixed(2)} <span className="text-sm not-italic ml-1">USDC</span></p>
                     </div>
                     <button
                         onClick={() => window.location.reload()}

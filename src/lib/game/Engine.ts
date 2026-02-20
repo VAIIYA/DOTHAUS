@@ -1,4 +1,4 @@
-import { GameState, Player, Food } from "./GameState";
+import { GameState, Player } from "./GameState";
 import { Socket } from "socket.io-client";
 
 export class GameEngine {
@@ -77,6 +77,46 @@ export class GameEngine {
 
     public setMyPlayerId(id: string) {
         this.myPlayerId = id;
+    }
+
+    public renderGameToText(): string {
+        const players = Object.values(this.state.players).map((player) => ({
+            id: player.id,
+            name: player.name,
+            totalMass: Math.round(player.totalMass || 0),
+            fragments: player.fragments.map((fragment) => ({
+                x: Math.round(fragment.x),
+                y: Math.round(fragment.y),
+                radius: Math.round(fragment.radius),
+                mass: Math.round(fragment.mass),
+            })),
+        }));
+
+        const payload = {
+            coordinateSystem: "origin=(0,0) top-left, +x right, +y down",
+            status: this.state.status,
+            countdown: this.state.countdown,
+            map: { width: this.state.mapWidth, height: this.state.mapHeight },
+            me: this.myPlayerId ? this.state.players[this.myPlayerId]?.name || null : null,
+            playerCount: players.length,
+            topPlayers: players
+                .sort((a, b) => b.totalMass - a.totalMass)
+                .slice(0, 5),
+            foodCount: Object.keys(this.state.food).length,
+            virusCount: Object.keys(this.state.viruses).length,
+            ejectedMassCount: Object.keys(this.state.ejectedMass).length,
+        };
+
+        return JSON.stringify(payload);
+    }
+
+    public advanceTime(ms: number) {
+        const frameMs = 1000 / 60;
+        const steps = Math.max(1, Math.round(ms / frameMs));
+        for (let i = 0; i < steps; i++) {
+            this.update();
+        }
+        this.draw();
     }
 
     private loop = () => {
@@ -346,4 +386,3 @@ export class GameEngine {
         return color;
     }
 }
-

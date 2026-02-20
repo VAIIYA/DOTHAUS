@@ -82,13 +82,7 @@ class GameRoom {
             walletAddress: playerData.walletAddress || null,
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
             fragments: [{
-                id: 0,
-                x: Math.random() * (MAP_WIDTH - 100) + 50,
-                y: Math.random() * (MAP_HEIGHT - 100) + 50,
-                mass: 10,
-                radius: 20,
-                vx: 0,
-                vy: 0,
+                ...this.createSpawnFragment(0),
             }],
             target: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
             socket: socket,
@@ -106,6 +100,29 @@ class GameRoom {
         }
 
         return this.players[socket.id];
+    }
+
+    getUnitVector(fromX, fromY, toX, toY) {
+        const dx = toX - fromX;
+        const dy = toY - fromY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.0001) {
+            return { x: 1, y: 0 };
+        }
+        return { x: dx / dist, y: dy / dist };
+    }
+
+    createSpawnFragment(id = 0) {
+        return {
+            id,
+            x: Math.random() * (MAP_WIDTH - 100) + 50,
+            y: Math.random() * (MAP_HEIGHT - 100) + 50,
+            mass: 10,
+            radius: 20,
+            vx: 0,
+            vy: 0,
+            splitTime: Date.now(),
+        };
     }
 
     startCountdown() {
@@ -147,7 +164,14 @@ class GameRoom {
     handleInput(socketId, inputData) {
         const player = this.players[socketId];
         if (player && inputData) {
-            player.target = inputData;
+            const targetX = Number(inputData.x);
+            const targetY = Number(inputData.y);
+            if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return;
+
+            player.target = {
+                x: Math.max(0, Math.min(MAP_WIDTH, targetX)),
+                y: Math.max(0, Math.min(MAP_HEIGHT, targetY)),
+            };
         }
     }
 
@@ -161,13 +185,12 @@ class GameRoom {
             if (frag.mass >= 20) {
                 const halfMass = frag.mass / 2;
                 frag.mass = halfMass;
+                frag.splitTime = Date.now();
 
                 // Direction to mouse
-                const dx = player.target.x - frag.x;
-                const dy = player.target.y - frag.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const vx = (dx / dist) * 15;
-                const vy = (dy / dist) * 15;
+                const direction = this.getUnitVector(frag.x, frag.y, player.target.x, player.target.y);
+                const vx = direction.x * 15;
+                const vy = direction.y * 15;
 
                 newFragments.push({
                     id: Date.now() + Math.random(),
@@ -193,17 +216,15 @@ class GameRoom {
         player.fragments.forEach(frag => {
             if (frag.mass > 25) {
                 frag.mass -= 15;
-                const dx = player.target.x - frag.x;
-                const dy = player.target.y - frag.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const direction = this.getUnitVector(frag.x, frag.y, player.target.x, player.target.y);
 
                 const id = `ejected-${Date.now()}-${Math.random()}`;
                 this.ejectedMass[id] = {
                     id,
-                    x: frag.x + (dx / dist) * (frag.radius + 10),
-                    y: frag.y + (dy / dist) * (frag.radius + 10),
-                    vx: (dx / dist) * 20,
-                    vy: (dy / dist) * 20,
+                    x: frag.x + direction.x * (frag.radius + 10),
+                    y: frag.y + direction.y * (frag.radius + 10),
+                    vx: direction.x * 20,
+                    vy: direction.y * 20,
                     color: player.color,
                     mass: 10,
                     radius: 10
@@ -338,6 +359,7 @@ class GameRoom {
         const pieces = 8;
         const newMass = frag.mass / pieces;
         frag.mass = newMass;
+        frag.splitTime = Date.now();
         for (let i = 0; i < pieces - 1; i++) {
             const angle = Math.random() * Math.PI * 2;
             player.fragments.push({
@@ -364,8 +386,12 @@ class GameRoom {
         if (this.id === "0") {
             // Respawn in lobby after a short delay
             setTimeout(() => {
-                if (this.players[id]) return; // Already re-joined?
-                this.addPlayer(player.socket, { name: player.name, walletAddress: player.walletAddress });
+                const respawnPlayer = this.players[id];
+                if (!respawnPlayer) return;
+
+                respawnPlayer.fragments = [this.createSpawnFragment(0)];
+                respawnPlayer.target = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+                this.updatePlayerStats(id);
             }, 2000);
         } else {
             delete this.players[id];

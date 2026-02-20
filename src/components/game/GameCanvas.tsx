@@ -12,7 +12,7 @@ interface GameCanvasProps {
 }
 
 export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
-    const { publicKey, connected } = useWallet();
+    const { publicKey } = useWallet();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
     const socketRef = useRef<Socket | null>(null);
@@ -40,10 +40,19 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
 
         if (onEngineReady) onEngineReady(engine);
 
+        const gameWindow = window as Window & {
+            render_game_to_text?: () => string;
+            advanceTime?: (ms: number) => void;
+        };
+        gameWindow.render_game_to_text = () => engine.renderGameToText();
+        gameWindow.advanceTime = (ms: number) => engine.advanceTime(ms);
+
         return () => {
             console.log("Cleaning up Game Engine...");
             engine.stop();
             socket.disconnect();
+            delete gameWindow.render_game_to_text;
+            delete gameWindow.advanceTime;
         };
     }, []);
 
@@ -74,7 +83,7 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
         return () => {
             socket.off("connect", join);
         };
-    }, [roomId, publicKey, connected]);
+    }, [roomId, publicKey]);
 
     return (
         <canvas
@@ -84,4 +93,3 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
         />
     );
 };
-
