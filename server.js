@@ -17,6 +17,7 @@ const handle = app.getRequestHandler();
 const MAP_WIDTH = gameConfig.map.width;
 const MAP_HEIGHT = gameConfig.map.height;
 const HOUSE_FEE_RATE = gameConfig.houseFeeRate;
+const ROOM_REGION = process.env.VERCEL_REGION || process.env.REGION || "auto";
 
 const dbClient = process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN
     ? createClient({
@@ -486,6 +487,7 @@ class GameRoom {
 }
 
 const rooms = {};
+const joinAttemptsByIp = new Map();
 
 gameConfig.rooms.forEach((roomConfig) => {
     rooms[roomConfig.id] = new GameRoom(roomConfig.id, roomConfig.price, roomConfig.maxPlayers);
@@ -495,6 +497,7 @@ gameConfig.rooms.forEach((roomConfig) => {
 });
 
 function getRoomSummaries() {
+    const nowIso = new Date().toISOString();
     return gameConfig.rooms.map((roomConfig) => {
         const room = rooms[roomConfig.id];
         return {
@@ -505,6 +508,8 @@ function getRoomSummaries() {
             isLobby: !!roomConfig.isLobby,
             players: Object.keys(room.players).length,
             status: room.status,
+            region: ROOM_REGION,
+            updatedAt: nowIso,
         };
     });
 }
@@ -536,11 +541,35 @@ app.prepare().then(() => {
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id);
         let currentRoomId = null;
+        let isSpectator = false;
         let lastInputAt = 0;
         let lastSplitAt = 0;
         let lastEjectAt = 0;
+        let lastJoinAt = 0;
 
-        socket.on("join-room", ({ roomId, playerData }) => {
+        socket.on("join-room", ({ roomId, playerData, spectator }) => {
+            const now = Date.now();
+            if (now - lastJoinAt < 800) {
+                socket.emit("error", "JOIN_RATE_LIMITED");
+                return;
+            }
+            lastJoinAt = now;
+
+            const ip = socket.handshake.address || "unknown";
+            const previousAttempt = joinAttemptsByIp.get(ip) || 0;
+            if (now - previousAttempt < 800) {
+                socket.emit("error", "IP_JOIN_RATE_LIMITED");
+                return;
+            }
+            joinAttemptsByIp.set(ip, now);
+            if (joinAttemptsByIp.size > 10000) {
+                for (const [key, timestamp] of joinAttemptsByIp.entries()) {
+                    if (now - timestamp > 30000) {
+                        joinAttemptsByIp.delete(key);
+                    }
+                }
+            }
+
             const room = rooms[roomId];
             if (!room) {
                 socket.emit("error", "Room not found");
@@ -550,8 +579,17 @@ app.prepare().then(() => {
             if (currentRoomId) {
                 // Leave previous room
                 const prevRoom = rooms[currentRoomId];
-                if (prevRoom) prevRoom.removePlayer(socket.id);
+                if (prevRoom && !isSpectator) prevRoom.removePlayer(socket.id);
                 socket.leave(currentRoomId);
+            }
+
+            isSpectator = Boolean(spectator);
+            if (isSpectator) {
+                currentRoomId = roomId;
+                socket.join(roomId);
+                socket.emit("spectator-joined", { roomId });
+                socket.emit("game-state", room.getState());
+                return;
             }
 
             const result = room.addPlayer(socket, playerData || {});
@@ -574,6 +612,7 @@ app.prepare().then(() => {
             const now = Date.now();
             if (now - lastInputAt < 33) return;
             lastInputAt = now;
+            if (isSpectator) return;
 
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleInput(socket.id, inputData);
@@ -584,6 +623,7 @@ app.prepare().then(() => {
             const now = Date.now();
             if (now - lastSplitAt < 250) return;
             lastSplitAt = now;
+            if (isSpectator) return;
 
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleSplit(socket.id);
@@ -594,6 +634,7 @@ app.prepare().then(() => {
             const now = Date.now();
             if (now - lastEjectAt < 150) return;
             lastEjectAt = now;
+            if (isSpectator) return;
 
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleEject(socket.id);
@@ -601,7 +642,7 @@ app.prepare().then(() => {
         });
 
         socket.on("disconnect", () => {
-            if (currentRoomId && rooms[currentRoomId]) {
+            if (currentRoomId && rooms[currentRoomId] && !isSpectator) {
                 rooms[currentRoomId].removePlayer(socket.id);
                 io.to(currentRoomId).emit("player-left", socket.id);
             }

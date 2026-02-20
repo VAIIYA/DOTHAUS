@@ -2,16 +2,29 @@
 
 import { GameCanvas } from "@/components/game/GameCanvas";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { GameState, INITIAL_STATE } from "@/lib/game/GameState";
 import { GAME_CONFIG, ROOM_BY_ID } from "@/config/game-config";
+import { GameEngine } from "@/lib/game/Engine";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { trackEvent } from "@/lib/analytics";
+import { updateGuestSessionStats } from "@/lib/guest-session";
 
 function PlayContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
+    const { connected } = useWallet();
     const roomId = searchParams.get("room") || "1";
+    const spectating = searchParams.get("spectate") === "1";
+
     const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
     const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+    const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "error">("connecting");
+    const [isTimedOut, setIsTimedOut] = useState(false);
+
+    const engineRef = useRef<GameEngine | null>(null);
+    const prevStatusRef = useRef<GameState["status"]>(INITIAL_STATE.status);
 
     const isLobby = roomId === "0";
     const playersCount = Object.keys(gameState.players).length;
@@ -20,11 +33,72 @@ function PlayContent() {
     const winnerPayout = totalPot * (1 - GAME_CONFIG.houseFeeRate);
     const amIWinner = !!myPlayerId && gameState.winnerName === gameState.players[myPlayerId]?.name;
 
+    useEffect(() => {
+        trackEvent("play_page_opened", { roomId, spectating });
+    }, [roomId, spectating]);
+
+    useEffect(() => {
+        if (connectionState !== "connecting") return;
+
+        const timer = window.setTimeout(() => {
+            setIsTimedOut(true);
+        }, 8000);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [connectionState]);
+
+    useEffect(() => {
+        const previous = prevStatusRef.current;
+        if (previous !== gameState.status) {
+            trackEvent("match_status_changed", {
+                roomId,
+                from: previous,
+                to: gameState.status,
+                spectating,
+            });
+            if (gameState.status === "ACTIVE") {
+                trackEvent("match_started", { roomId, spectating });
+            }
+            if (gameState.status === "ENDED") {
+                trackEvent("match_ended", { roomId, spectating, winner: gameState.winnerName });
+            }
+        }
+        prevStatusRef.current = gameState.status;
+    }, [gameState.status, gameState.winnerName, roomId, spectating]);
+
     return (
         <div className="w-screen h-screen overflow-hidden bg-deep-space relative font-sans">
             <GameCanvas
                 roomId={roomId}
+                spectating={spectating}
+                onConnectionState={(state) => {
+                    setConnectionState(state);
+                    if (state === "connected") {
+                        setIsTimedOut(false);
+                        trackEvent("socket_connected", { roomId, spectating });
+                    } else if (state === "error") {
+                        trackEvent("socket_connect_error", { roomId, spectating });
+                    }
+                }}
+                onGameEvent={(event, payload) => {
+                    trackEvent("game_event", { event, roomId, spectating, ...payload });
+                    if (spectating || connected) return;
+
+                    if (event === "game_over" && !isLobby) {
+                        updateGuestSessionStats({ losses: 1 });
+                    }
+
+                    if (event === "victory" && !isLobby) {
+                        updateGuestSessionStats({
+                            wins: 1,
+                            totalEarnings: Number(payload.pot || 0),
+                        });
+                    }
+                }}
                 onEngineReady={(engine) => {
+                    engineRef.current = engine;
                     engine.onStateUpdate = (state) => {
                         setGameState({ ...state });
                         setMyPlayerId(engine.myPlayerId);
@@ -32,11 +106,40 @@ function PlayContent() {
                 }}
             />
 
+            {(connectionState === "connecting" || (connectionState === "error" && isTimedOut)) && (
+                <div className="absolute inset-0 z-30 bg-deep-space/80 backdrop-blur-md flex items-center justify-center px-6">
+                    <div className="glass-panel rounded-2xl border border-white/10 p-8 max-w-md w-full text-center">
+                        <h2 className="text-2xl font-heading font-black mb-3">
+                            {connectionState === "error" || isTimedOut ? "Connection Failed" : "Connecting to Arena"}
+                        </h2>
+                        <p className="text-starlight/70 text-sm mb-6">
+                            {connectionState === "error" || isTimedOut
+                                ? "Could not establish a stable socket connection."
+                                : "Establishing real-time link to game server..."}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="flex-1 py-3 rounded-lg bg-neon-blue text-deep-space font-black uppercase tracking-wider"
+                            >
+                                Retry
+                            </button>
+                            <button
+                                onClick={() => router.push("/")}
+                                className="flex-1 py-3 rounded-lg border border-white/20 text-white font-bold uppercase tracking-wider"
+                            >
+                                Lobby
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* UI Overlay: Top Left Info */}
             <div className="absolute top-6 left-6 z-10 glass-panel p-6 rounded-2xl border border-white/10 shadow-2xl">
                 <h2 className="text-xl font-bold text-white font-heading flex items-center gap-3">
                     DOTHAUS <span className={`text-[10px] px-2 py-0.5 rounded border ${isLobby ? "bg-plasma-purple/10 text-plasma-purple border-plasma-purple/20" : "bg-neon-blue/10 text-neon-blue border-neon-blue/20"}`}>
-                        {isLobby ? "PRACTICE" : "ELIMINATION"}
+                        {spectating ? "SPECTATING" : isLobby ? "PRACTICE" : "ELIMINATION"}
                     </span>
                 </h2>
                 <div className="mt-4 space-y-1">
@@ -74,7 +177,7 @@ function PlayContent() {
                 </div>
             )}
 
-            {gameState.status === "ENDED" && !isLobby && (
+            {gameState.status === "ENDED" && !isLobby && !spectating && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center glass-panel p-16 rounded-[2.5rem] border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
                     <h2 className="text-xs text-neon-blue uppercase tracking-[0.5em] font-black mb-4">Match Complete</h2>
                     <h1 className="text-6xl font-black text-white font-heading mb-4 italic tracking-tighter uppercase">
@@ -121,6 +224,29 @@ function PlayContent() {
                     <span className="text-white">{playersCount}</span>
                 </div>
             </div>
+
+            {!spectating && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 md:hidden flex items-center gap-3">
+                <button
+                    onClick={() => engineRef.current?.emitSplit()}
+                    className="px-5 py-3 rounded-xl bg-neon-blue text-deep-space font-black text-sm uppercase tracking-wider"
+                >
+                    Split
+                </button>
+                <button
+                    onClick={() => engineRef.current?.emitEject()}
+                    className="px-5 py-3 rounded-xl bg-plasma-purple text-white font-black text-sm uppercase tracking-wider"
+                >
+                    Eject
+                </button>
+            </div>
+            )}
+
+            {!spectating && (
+            <p className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 text-[10px] text-starlight/50 md:hidden uppercase tracking-widest">
+                Drag on screen to steer
+            </p>
+            )}
         </div>
     );
 }

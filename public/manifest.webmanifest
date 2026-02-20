@@ -1,0 +1,16 @@
+{
+  "name": "DOTHAUS",
+  "short_name": "DOTHAUS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a12",
+  "theme_color": "#0a0a12",
+  "description": "Play, Earn, Dominate in browser-first multiplayer arenas.",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

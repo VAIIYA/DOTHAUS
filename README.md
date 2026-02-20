@@ -8,6 +8,7 @@ Multiplayer Agar-style arena game built with Next.js, Socket.IO, Solana wallet a
 - Custom Node server (`server.js`) for Socket.IO game loop
 - Drizzle ORM + Turso (`@libsql/client`)
 - Solana wallet adapter for sign-in and gameplay identity
+- PWA support (manifest + service worker + install prompt)
 
 ## Prerequisites
 
@@ -62,6 +63,8 @@ npm run build
 - `server.js`: room lifecycle, game tick, socket events, live `/api/rooms` summaries
 - `src/app/api/user/nonce`: issues short-lived DB-backed nonces
 - `src/app/api/user`: verifies signed SIWS-style message and consumes nonce
+- `src/app/api/user/claim-session`: merges anonymous session stats into a connected wallet profile
+- `src/app/api/analytics`: lightweight telemetry ingest endpoint
 - `src/lib/services/user-service.ts`: atomic leaderboard stat increments
 - `src/components/game/*`: client renderer and real-time gameplay UI
 
@@ -76,3 +79,4 @@ npm run build
 
 - Room configuration and fee model are centralized in `src/config/game-config.json`.
 - House fee is configurable via `houseFeeRate` in the shared config.
+- Service worker caches shell assets only and skips `/api/*` and `/socket.io/*` traffic.

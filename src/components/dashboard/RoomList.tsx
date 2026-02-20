@@ -4,6 +4,7 @@ import { RoomCard } from "./RoomCard";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GAME_CONFIG } from "@/config/game-config";
+import { trackEvent } from "@/lib/analytics";
 
 interface RoomSummary {
     id: string;
@@ -13,22 +14,32 @@ interface RoomSummary {
     maxPlayers: number;
     status: "WAITING" | "STARTING" | "ACTIVE" | "ENDED";
     isLobby: boolean;
+    region?: string;
+    updatedAt?: string;
 }
 
 export const RoomList = () => {
     const router = useRouter();
     const [rooms, setRooms] = useState<RoomSummary[]>([]);
+    const [pingMs, setPingMs] = useState<number | null>(null);
+    const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
     useEffect(() => {
+        trackEvent("landing_viewed");
         let isMounted = true;
         let timer: ReturnType<typeof setInterval> | null = null;
 
         const fetchRooms = async () => {
             try {
+                const startedAt = performance.now();
                 const response = await fetch("/api/rooms");
                 if (!response.ok) return;
                 const payload = (await response.json()) as RoomSummary[];
-                if (isMounted) setRooms(payload);
+                if (isMounted) {
+                    setRooms(payload);
+                    setPingMs(Math.round(performance.now() - startedAt));
+                    setLastUpdatedAt(new Date().toISOString());
+                }
             } catch (error) {
                 console.error("Failed to fetch rooms:", error);
             }
@@ -53,13 +64,15 @@ export const RoomList = () => {
             maxPlayers: room.maxPlayers,
             status: (room.isLobby ? "ACTIVE" : "WAITING") as RoomSummary["status"],
             isLobby: room.isLobby,
+            region: "Auto",
+            updatedAt: new Date().toISOString(),
         }));
     }, [rooms]);
 
-    const handleJoin = (roomId: string, price: number) => {
+    const handleJoin = (roomId: string, price: number, spectate?: boolean) => {
         console.log(`Joining room ${roomId} for ${price} USDC`);
-        // TODO: Trigger Solana transaction logic here first
-        router.push(`/play?room=${roomId}`);
+        trackEvent(spectate ? "room_spectate_clicked" : "room_join_clicked", { roomId, price });
+        router.push(spectate ? `/play?room=${roomId}&spectate=1` : `/play?room=${roomId}`);
     };
 
     return (
@@ -74,6 +87,9 @@ export const RoomList = () => {
                         <br />
                         <span className="text-plasma-purple font-bold">New: Practice Arena is now open for free play!</span>
                     </p>
+                    <div className="mt-4 text-xs uppercase tracking-[0.2em] text-starlight/50 font-bold">
+                        Region: {displayRooms[0]?.region || "Auto"} · Ping: {pingMs ?? "--"}ms · Updated: {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString() : "--"}
+                    </div>
                 </div>
 
                 {/* Lobby Room - Featured */}

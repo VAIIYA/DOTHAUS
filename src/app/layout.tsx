@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Orbitron, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -17,9 +17,24 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "DOTHAUS - Solana Battle Arena",
   description: "Play, Earn, Dominate. The ultimate elimination arena on Solana.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "DOTHAUS",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a12",
 };
 
 import { SolanaProvider } from "@/context/SolanaProvider";
+import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
 
 export default function RootLayout({
   children,
@@ -31,6 +46,7 @@ export default function RootLayout({
       <body
         className={`${orbitron.variable} ${inter.variable} antialiased font-sans bg-deep-space text-white overflow-hidden`}
       >
+        <ServiceWorkerRegistration />
         <SolanaProvider>{children}</SolanaProvider>
       </body>
     </html>

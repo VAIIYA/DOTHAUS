@@ -13,16 +13,20 @@ interface RoomCardProps {
     maxPlayers: number;
     status: "WAITING" | "STARTING" | "ACTIVE" | "ENDED";
     isLobby?: boolean;
-    onJoin: (roomId: string, price: number) => void;
+    region?: string;
+    updatedAt?: string;
+    onJoin: (roomId: string, price: number, spectate?: boolean) => void;
 }
 
-export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby, onJoin }: RoomCardProps) => {
+export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby, region, updatedAt, onJoin }: RoomCardProps) => {
     const { connected } = useWallet();
 
     const handleJoin = useCallback(() => {
-        if (!connected) return;
         onJoin(id, price);
-    }, [connected, onJoin, id, price]);
+    }, [onJoin, id, price]);
+    const handleSpectate = useCallback(() => {
+        onJoin(id, price, true);
+    }, [onJoin, id, price]);
 
     const isOpen = isRoomJoinable({ status, isLobby: !!isLobby, players, maxPlayers });
     const statusLabel = isLobby ? "ACTIVE" : status;
@@ -62,6 +66,9 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                     <p className="text-starlight/40 text-sm uppercase tracking-[0.2em] font-bold">
                         {isLobby ? "Join anytime • Play freely • No Stakes" : "Competitive Arena • Winner takes all"}
                     </p>
+                    <p className="text-starlight/30 text-[10px] uppercase tracking-[0.2em] mt-2">
+                        {region || "Auto"} · {updatedAt ? new Date(updatedAt).toLocaleTimeString() : "Live"}
+                    </p>
                 </div>
 
                 {/* Progress Section */}
@@ -83,7 +90,7 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
 
             {/* Action Section */}
             <div className="relative z-10 shrink-0 w-full md:w-auto">
-                {connected ? (
+                <div className="flex flex-col gap-2 w-full md:w-auto">
                     <button
                         onClick={handleJoin}
                         disabled={!isOpen}
@@ -94,13 +101,21 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                             : "bg-white/5 text-starlight/20 cursor-not-allowed grayscale"
                             }`}
                     >
-                        {isOpen ? (isLobby ? "Enter Practice" : "Join Arena") : "Spectate"}
+                        {isOpen ? (isLobby ? "Enter Practice" : connected ? "Join Arena" : "Play as Guest") : "Unavailable"}
                     </button>
-                ) : (
-                    <div className="opacity-90 hover:opacity-100 transition-opacity transform hover:scale-[1.02]">
+                    {!isOpen && (
+                        <button
+                            onClick={handleSpectate}
+                            className="w-full md:px-10 py-3 rounded-xl border border-neon-blue/40 text-neon-blue font-black uppercase tracking-[0.15em]"
+                        >
+                            Spectate
+                        </button>
+                    )}
+                    {!connected && (
+                        <div className="opacity-90 hover:opacity-100 transition-opacity transform hover:scale-[1.02]">
                         <WalletMultiButton style={{
                             width: '100%',
-                            height: '56px',
+                            height: '48px',
                             justifyContent: 'center',
                             backgroundColor: '#bc13fe',
                             borderRadius: '12px',
@@ -109,7 +124,8 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                             letterSpacing: '0.15em'
                         }} />
                     </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

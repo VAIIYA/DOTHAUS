@@ -15,6 +15,8 @@ export class GameEngine {
     // Local player ID
     public myPlayerId: string | null = null;
     public onStateUpdate: ((state: GameState) => void) | null = null;
+    public onGameOver: ((data: { winner: string; isLobby: boolean }) => void) | null = null;
+    public onVictory: ((data: { pot: number }) => void) | null = null;
 
     // Mouse Input
     private mousePos = { x: 0, y: 0 };
@@ -32,6 +34,8 @@ export class GameEngine {
 
         // Handle Input
         window.addEventListener("mousemove", this.onMouseMove);
+        window.addEventListener("touchstart", this.onTouchMove, { passive: false });
+        window.addEventListener("touchmove", this.onTouchMove, { passive: false });
         window.addEventListener("keydown", this.onKeyDown);
 
         // Socket Listeners
@@ -50,7 +54,11 @@ export class GameEngine {
 
         this.socket.on("game-over", (data: { winner: string, isLobby: boolean }) => {
             console.log("Game Over:", data);
-            // Could trigger UI here, but mostly handled by state and PlayContent
+            if (this.onGameOver) this.onGameOver(data);
+        });
+
+        this.socket.on("victory", (data: { pot: number }) => {
+            if (this.onVictory) this.onVictory(data);
         });
     }
 
@@ -72,11 +80,26 @@ export class GameEngine {
         }
         window.removeEventListener("resize", this.handleResize);
         window.removeEventListener("mousemove", this.onMouseMove);
+        window.removeEventListener("touchstart", this.onTouchMove);
+        window.removeEventListener("touchmove", this.onTouchMove);
         window.removeEventListener("keydown", this.onKeyDown);
     }
 
     public setMyPlayerId(id: string) {
         this.myPlayerId = id;
+    }
+
+    public emitSplit() {
+        if (this.socket.connected) this.socket.emit("split");
+    }
+
+    public emitEject() {
+        if (this.socket.connected) this.socket.emit("eject");
+    }
+
+    public emitInput(targetX: number, targetY: number) {
+        if (!this.socket.connected) return;
+        this.socket.emit("input", { x: targetX, y: targetY });
     }
 
     public renderGameToText(): string {
@@ -127,13 +150,23 @@ export class GameEngine {
 
     private onKeyDown = (e: KeyboardEvent) => {
         if (e.code === "Space") {
-            this.socket.emit("split");
+            this.emitSplit();
         } else if (e.code === "KeyW") {
-            this.socket.emit("eject");
+            this.emitEject();
         }
     };
 
     private onMouseMove = (e: MouseEvent) => {
+        this.emitInputFromScreenPoint(e.clientX, e.clientY);
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!e.touches[0]) return;
+        e.preventDefault();
+        this.emitInputFromScreenPoint(e.touches[0].clientX, e.touches[0].clientY);
+    };
+
+    public emitInputFromScreenPoint(clientX: number, clientY: number) {
         if (!this.myPlayerId || !this.state.players[this.myPlayerId]) return;
 
         const player = this.state.players[this.myPlayerId];
@@ -142,16 +175,14 @@ export class GameEngine {
         avgX /= player.fragments.length;
         avgY /= player.fragments.length;
 
-        const dx = e.clientX - this.canvas.width / 2;
-        const dy = e.clientY - this.canvas.height / 2;
+        const dx = clientX - this.canvas.width / 2;
+        const dy = clientY - this.canvas.height / 2;
 
         const targetX = avgX + dx / this.camera.scale;
         const targetY = avgY + dy / this.camera.scale;
 
-        if (this.socket.connected) {
-            this.socket.emit("input", { x: targetX, y: targetY });
-        }
-    };
+        this.emitInput(targetX, targetY);
+    }
 
     private update() {
         // Interpolate State

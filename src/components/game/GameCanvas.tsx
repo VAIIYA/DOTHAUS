@@ -8,19 +8,30 @@ import { useWallet } from "@solana/wallet-adapter-react";
 
 interface GameCanvasProps {
     roomId: string;
+    spectating?: boolean;
     onEngineReady?: (engine: GameEngine) => void;
+    onConnectionState?: (state: "connecting" | "connected" | "error") => void;
+    onGameEvent?: (event: "game_over" | "victory", payload: { winner?: string; isLobby?: boolean; pot?: number }) => void;
 }
 
-export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
+export const GameCanvas = ({ roomId, spectating, onEngineReady, onConnectionState, onGameEvent }: GameCanvasProps) => {
     const { publicKey } = useWallet();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
     const socketRef = useRef<Socket | null>(null);
     const onEngineReadyRef = useRef(onEngineReady);
+    const onConnectionStateRef = useRef(onConnectionState);
+    const onGameEventRef = useRef(onGameEvent);
 
     useEffect(() => {
         onEngineReadyRef.current = onEngineReady;
     }, [onEngineReady]);
+    useEffect(() => {
+        onConnectionStateRef.current = onConnectionState;
+    }, [onConnectionState]);
+    useEffect(() => {
+        onGameEventRef.current = onGameEvent;
+    }, [onGameEvent]);
 
     // Initialize Socket and Engine only once
     useEffect(() => {
@@ -29,18 +40,23 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
         console.log("Initializing Game Socket...");
         const socket = io();
         socketRef.current = socket;
+        onConnectionStateRef.current?.("connecting");
 
         const engine = new GameEngine(canvasRef.current, INITIAL_STATE, socket);
         engineRef.current = engine;
         engine.start();
+        engine.onGameOver = (data) => onGameEventRef.current?.("game_over", data);
+        engine.onVictory = (data) => onGameEventRef.current?.("victory", data);
 
         socket.on("connect", () => {
             console.log("Socket connected:", socket.id);
             engine.setMyPlayerId(socket.id!);
+            onConnectionStateRef.current?.("connected");
         });
 
         socket.on("connect_error", (err) => {
             console.error("Socket connection error:", err);
+            onConnectionStateRef.current?.("error");
         });
 
         if (onEngineReadyRef.current) onEngineReadyRef.current(engine);
@@ -72,8 +88,9 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
             console.log(`Joining room ${roomId} with wallet:`, publicKey?.toBase58());
             socket.emit("join-room", {
                 roomId,
+                spectator: !!spectating,
                 playerData: {
-                    name: publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Player",
+                    name: publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Guest",
                     walletAddress: publicKey?.toBase58() || null
                 }
             });
@@ -88,7 +105,7 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
         return () => {
             socket.off("connect", join);
         };
-    }, [roomId, publicKey]);
+    }, [roomId, publicKey, spectating]);
 
     return (
         <canvas

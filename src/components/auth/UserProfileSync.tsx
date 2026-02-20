@@ -4,6 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useEffect, useRef } from "react";
 import { setUser, setAuthenticating } from "@/lib/store";
 import bs58 from "bs58";
+import { trackEvent } from "@/lib/analytics";
 
 export const UserProfileSync = () => {
     const { publicKey, connected, signMessage } = useWallet();
@@ -11,6 +12,7 @@ export const UserProfileSync = () => {
 
     useEffect(() => {
         if (connected && publicKey && signMessage && !isSyncing.current) {
+            trackEvent("wallet_connected", { walletAddress: publicKey.toBase58() });
             const syncUser = async () => {
                 isSyncing.current = true;
                 setAuthenticating(true);
@@ -54,6 +56,7 @@ export const UserProfileSync = () => {
                         const userData = await response.json();
                         console.log('User profile synced:', userData);
                         setUser(userData);
+                        trackEvent("wallet_profile_synced", { walletAddress: publicKey.toBase58() });
                     }
                 } catch (error) {
                     console.error('Error syncing user profile:', error);
