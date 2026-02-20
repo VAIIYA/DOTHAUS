@@ -1,24 +1,60 @@
 "use client";
 
 import { RoomCard } from "./RoomCard";
-
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GAME_CONFIG } from "@/config/game-config";
 
-// Mock data for rooms
-const ROOMS = [
-    { id: "0", name: "PRACTICE ARENA", price: 0, players: 12, maxPlayers: 50, status: "OPEN", isLobby: true },
-    { id: "1", price: 0.1, players: 3, maxPlayers: 10, status: "OPEN" },
-    { id: "2", price: 0.5, players: 8, maxPlayers: 10, status: "OPEN" },
-    { id: "3", price: 1, players: 10, maxPlayers: 10, status: "FULL" },
-    { id: "4", price: 2, players: 1, maxPlayers: 10, status: "OPEN" },
-    { id: "5", price: 5, players: 0, maxPlayers: 10, status: "OPEN" },
-    { id: "6", price: 10, players: 5, maxPlayers: 10, status: "OPEN" },
-    { id: "7", price: 25, players: 9, maxPlayers: 10, status: "OPEN" },
-    { id: "8", price: 50, players: 0, maxPlayers: 10, status: "OPEN" },
-] as const;
+interface RoomSummary {
+    id: string;
+    name: string;
+    price: number;
+    players: number;
+    maxPlayers: number;
+    status: "WAITING" | "STARTING" | "ACTIVE" | "ENDED";
+    isLobby: boolean;
+}
 
 export const RoomList = () => {
     const router = useRouter();
+    const [rooms, setRooms] = useState<RoomSummary[]>([]);
+
+    useEffect(() => {
+        let isMounted = true;
+        let timer: ReturnType<typeof setInterval> | null = null;
+
+        const fetchRooms = async () => {
+            try {
+                const response = await fetch("/api/rooms");
+                if (!response.ok) return;
+                const payload = (await response.json()) as RoomSummary[];
+                if (isMounted) setRooms(payload);
+            } catch (error) {
+                console.error("Failed to fetch rooms:", error);
+            }
+        };
+
+        fetchRooms();
+        timer = setInterval(fetchRooms, 2000);
+
+        return () => {
+            isMounted = false;
+            if (timer) clearInterval(timer);
+        };
+    }, []);
+
+    const displayRooms = useMemo<RoomSummary[]>(() => {
+        if (rooms.length > 0) return rooms;
+        return GAME_CONFIG.rooms.map((room) => ({
+            id: room.id,
+            name: room.name || `${room.price} USDC`,
+            price: room.price,
+            players: 0,
+            maxPlayers: room.maxPlayers,
+            status: (room.isLobby ? "ACTIVE" : "WAITING") as RoomSummary["status"],
+            isLobby: room.isLobby,
+        }));
+    }, [rooms]);
 
     const handleJoin = (roomId: string, price: number) => {
         console.log(`Joining room ${roomId} for ${price} USDC`);
@@ -42,22 +78,20 @@ export const RoomList = () => {
 
                 {/* Lobby Room - Featured */}
                 <div className="mb-12">
-                    {ROOMS.filter(r => r.id === "0").map(room => (
+                    {displayRooms.filter(r => r.id === "0").map(room => (
                         <RoomCard
                             key={room.id}
                             {...room}
-                            status={room.status as "OPEN" | "FULL" | "PLAYING"}
                             onJoin={handleJoin}
                         />
                     ))}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 md:gap-10">
-                    {ROOMS.filter(r => r.id !== "0").map((room) => (
+                    {displayRooms.filter(r => r.id !== "0").map((room) => (
                         <RoomCard
                             key={room.id}
                             {...room}
-                            status={room.status as "OPEN" | "FULL" | "PLAYING"}
                             onJoin={handleJoin}
                         />
                     ))}

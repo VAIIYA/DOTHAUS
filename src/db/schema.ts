@@ -11,5 +11,14 @@ export const users = sqliteTable('users', {
     updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
+export const authNonces = sqliteTable('auth_nonces', {
+    nonce: text('nonce').primaryKey(),
+    walletAddress: text('wallet_address').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    usedAt: integer('used_at', { mode: 'timestamp' }),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type AuthNonce = typeof authNonces.$inferSelect;

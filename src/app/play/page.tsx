@@ -5,6 +5,7 @@ import { GameCanvas } from "@/components/game/GameCanvas";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { GameState, INITIAL_STATE } from "@/lib/game/GameState";
+import { GAME_CONFIG, ROOM_BY_ID } from "@/config/game-config";
 
 function PlayContent() {
     const searchParams = useSearchParams();
@@ -14,20 +15,9 @@ function PlayContent() {
 
     const isLobby = roomId === "0";
     const playersCount = Object.keys(gameState.players).length;
-    const roomPriceById: Record<string, number> = {
-        "0": 0,
-        "1": 0.1,
-        "2": 0.5,
-        "3": 1,
-        "4": 2,
-        "5": 5,
-        "6": 10,
-        "7": 25,
-        "8": 50,
-    };
-    const roomPrice = roomPriceById[roomId] ?? 0.1;
+    const roomPrice = ROOM_BY_ID[roomId]?.price ?? ROOM_BY_ID["1"]?.price ?? 0.1;
     const totalPot = playersCount * roomPrice;
-    const winnerPayout = totalPot * 0.95;
+    const winnerPayout = totalPot * (1 - GAME_CONFIG.houseFeeRate);
     const amIWinner = !!myPlayerId && gameState.winnerName === gameState.players[myPlayerId]?.name;
 
     return (

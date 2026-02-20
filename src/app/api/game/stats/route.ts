@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserService } from '@/lib/services/user-service';
+import { normalizeStatDelta } from '@/lib/stats/normalization';
 
 export async function POST(req: NextRequest) {
     try {
-        const { walletAddress, wins, losses, totalEarnings, secret } = await req.json();
-
-        if (secret !== process.env.INTERNAL_API_SECRET) {
+        const internalHeader = req.headers.get('x-internal-api-key');
+        if (!internalHeader || internalHeader !== process.env.INTERNAL_API_SECRET) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!walletAddress) {
+        const { walletAddress, wins, losses, totalEarnings } = await req.json();
+
+        if (!walletAddress || typeof walletAddress !== 'string') {
             return NextResponse.json({ error: 'Wallet address is required' }, { status: 400 });
         }
 
+        const normalizedWins = normalizeStatDelta(wins);
+        const normalizedLosses = normalizeStatDelta(losses);
+        const normalizedEarnings = normalizeStatDelta(totalEarnings);
+
         await UserService.updateUserStats(walletAddress, {
-            wins: wins || 0,
-            losses: losses || 0,
-            totalEarnings: totalEarnings || 0,
+            wins: normalizedWins,
+            losses: normalizedLosses,
+            totalEarnings: normalizedEarnings,
         });
 
         return NextResponse.json({ success: true });

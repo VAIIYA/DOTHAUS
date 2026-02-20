@@ -16,6 +16,11 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
     const socketRef = useRef<Socket | null>(null);
+    const onEngineReadyRef = useRef(onEngineReady);
+
+    useEffect(() => {
+        onEngineReadyRef.current = onEngineReady;
+    }, [onEngineReady]);
 
     // Initialize Socket and Engine only once
     useEffect(() => {
@@ -38,7 +43,7 @@ export const GameCanvas = ({ roomId, onEngineReady }: GameCanvasProps) => {
             console.error("Socket connection error:", err);
         });
 
-        if (onEngineReady) onEngineReady(engine);
+        if (onEngineReadyRef.current) onEngineReadyRef.current(engine);
 
         const gameWindow = window as Window & {
             render_game_to_text?: () => string;

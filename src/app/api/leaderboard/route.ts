@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { desc } from 'drizzle-orm';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
         const topUsers = await db.select()
             .from(users)

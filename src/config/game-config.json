@@ -1,0 +1,64 @@
+{
+  "map": {
+    "width": 3000,
+    "height": 3000
+  },
+  "houseFeeRate": 0.05,
+  "rooms": [
+    {
+      "id": "0",
+      "name": "PRACTICE ARENA",
+      "price": 0,
+      "maxPlayers": 50,
+      "isLobby": true
+    },
+    {
+      "id": "1",
+      "price": 0.1,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "2",
+      "price": 0.5,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "3",
+      "price": 1,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "4",
+      "price": 2,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "5",
+      "price": 5,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "6",
+      "price": 10,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "7",
+      "price": 25,
+      "maxPlayers": 10,
+      "isLobby": false
+    },
+    {
+      "id": "8",
+      "price": 50,
+      "maxPlayers": 10,
+      "isLobby": false
+    }
+  ]
+}

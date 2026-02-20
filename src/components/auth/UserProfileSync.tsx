@@ -15,7 +15,22 @@ export const UserProfileSync = () => {
                 isSyncing.current = true;
                 setAuthenticating(true);
                 try {
-                    const message = `Sign-in to Solar.io: ${new Date().toISOString().split('T')[0]}`;
+                    const nonceResponse = await fetch('/api/user/nonce', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            walletAddress: publicKey.toBase58(),
+                        }),
+                    });
+
+                    if (!nonceResponse.ok) {
+                        throw new Error('Failed to fetch authentication nonce');
+                    }
+
+                    const noncePayload = await nonceResponse.json();
+                    const message = noncePayload.message as string;
                     const encodedMessage = new TextEncoder().encode(message);
                     const signature = await signMessage(encodedMessage);
                     const signatureBase58 = bs58.encode(signature);
@@ -29,6 +44,7 @@ export const UserProfileSync = () => {
                             walletAddress: publicKey.toBase58(),
                             signature: signatureBase58,
                             message: message,
+                            nonce: noncePayload.nonce,
                         }),
                     });
 

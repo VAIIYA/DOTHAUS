@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DOTHAUS
 
-## Getting Started
+Multiplayer Agar-style arena game built with Next.js, Socket.IO, Solana wallet auth, and Turso/Drizzle persistence.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router + React + TypeScript
+- Custom Node server (`server.js`) for Socket.IO game loop
+- Drizzle ORM + Turso (`@libsql/client`)
+- Solana wallet adapter for sign-in and gameplay identity
+
+## Prerequisites
+
+- Node.js 20+
+- npm 10+
+- Turso database + auth token
+
+## Environment
+
+Create `.env.local` with:
+
+```bash
+TURSO_DATABASE_URL=libsql://...
+TURSO_AUTH_TOKEN=...
+INTERNAL_API_SECRET=your-internal-secret
+HOST=0.0.0.0
+PORT=3000
+```
+
+## Install
+
+```bash
+npm install
+```
+
+## Database
+
+Apply migrations in `drizzle/` to provision `users` and `auth_nonces`.
+
+```bash
+npx drizzle-kit migrate
+```
+
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App and game server run on the same host/port.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run test
+npm run build
+```
 
-## Learn More
+## Architecture
 
-To learn more about Next.js, take a look at the following resources:
+- `server.js`: room lifecycle, game tick, socket events, live `/api/rooms` summaries
+- `src/app/api/user/nonce`: issues short-lived DB-backed nonces
+- `src/app/api/user`: verifies signed SIWS-style message and consumes nonce
+- `src/lib/services/user-service.ts`: atomic leaderboard stat increments
+- `src/components/game/*`: client renderer and real-time gameplay UI
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security model (wallet auth)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Client requests nonce from `/api/user/nonce`
+- Server stores nonce with expiry in `auth_nonces`
+- Client signs canonical message including domain + nonce + expiry
+- Server verifies signature and marks nonce as used (one-time)
 
-## Deploy on Vercel
+## Notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Room configuration and fee model are centralized in `src/config/game-config.json`.
+- House fee is configurable via `houseFeeRate` in the shared config.

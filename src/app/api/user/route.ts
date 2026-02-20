@@ -1,14 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserService } from '@/lib/services/user-service';
+import { AuthService } from '@/lib/services/auth-service';
+import { buildAuthMessage } from '@/lib/auth/siws';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
 export async function POST(req: NextRequest) {
     try {
-        const { walletAddress, signature, message } = await req.json();
+        const { walletAddress, signature, message, nonce } = await req.json();
 
-        if (!walletAddress || !signature || !message) {
+        if (!walletAddress || !signature || !message || !nonce) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        const nonceRecord = await AuthService.getValidNonce(walletAddress, nonce);
+        if (!nonceRecord) {
+            return NextResponse.json({ error: 'Invalid or expired nonce' }, { status: 401 });
+        }
+
+        const domain = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
+        const expectedMessage = buildAuthMessage({
+            domain,
+            walletAddress,
+            nonce: nonceRecord.nonce,
+            issuedAt: nonceRecord.createdAt.toISOString(),
+            expiresAt: nonceRecord.expiresAt.toISOString(),
+        });
+
+        if (message !== expectedMessage) {
+            return NextResponse.json({ error: 'Unexpected sign-in message' }, { status: 401 });
         }
 
         // Verify signature
@@ -22,8 +42,13 @@ export async function POST(req: NextRequest) {
             if (!isVerified) {
                 return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
             }
-        } catch (e) {
+        } catch {
             return NextResponse.json({ error: 'Signature verification failed' }, { status: 401 });
+        }
+
+        const consumed = await AuthService.markNonceUsed(nonceRecord.nonce);
+        if (!consumed) {
+            return NextResponse.json({ error: 'Nonce already used' }, { status: 401 });
         }
 
         const user = await UserService.getOrCreateUser(walletAddress);

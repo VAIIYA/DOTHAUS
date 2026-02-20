@@ -1,17 +1,44 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+require("dotenv").config({ path: ".env.local" });
+
 const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
 const { Server } = require("socket.io");
+const { createClient } = require("@libsql/client");
+const gameConfig = require("./src/config/game-config.json");
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "localhost";
-const port = 3000;
+const hostname = process.env.HOST || "0.0.0.0";
+const port = Number(process.env.PORT || 3000);
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-const MOVEMENT_SPEED = 5;
-const MAP_WIDTH = 3000;
-const MAP_HEIGHT = 3000;
+const MAP_WIDTH = gameConfig.map.width;
+const MAP_HEIGHT = gameConfig.map.height;
+const HOUSE_FEE_RATE = gameConfig.houseFeeRate;
+
+const dbClient = process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN
+    ? createClient({
+        url: process.env.TURSO_DATABASE_URL,
+        authToken: process.env.TURSO_AUTH_TOKEN,
+    })
+    : null;
+
+async function applyStatsUpdate(walletAddress, wins, losses, totalEarnings) {
+    if (!dbClient || !walletAddress) return;
+
+    const defaultUsername = `User_${walletAddress.slice(0, 6)}`;
+    await dbClient.execute({
+        sql: "INSERT OR IGNORE INTO users (id, username, wins, losses, total_earnings, created_at, updated_at) VALUES (?, ?, 0, 0, 0, ?, ?)",
+        args: [walletAddress, defaultUsername, Date.now(), Date.now()],
+    });
+
+    await dbClient.execute({
+        sql: "UPDATE users SET wins = COALESCE(wins, 0) + ?, losses = COALESCE(losses, 0) + ?, total_earnings = COALESCE(total_earnings, 0) + ?, updated_at = ? WHERE id = ?",
+        args: [wins || 0, losses || 0, totalEarnings || 0, Date.now(), walletAddress],
+    });
+}
 
 // Room Management
 class GameRoom {
@@ -154,11 +181,9 @@ class GameRoom {
 
     removePlayer(socketId) {
         delete this.players[socketId];
-        // If it's NOT a lobby and we are below max, update status if was FULL
-        if (this.id !== "0") {
-            if (Object.keys(this.players).length < this.maxPlayers && this.status === "FULL") {
-                this.status = "OPEN";
-            }
+        if (this.id !== "0" && this.status === "STARTING" && Object.keys(this.players).length < 2) {
+            this.status = "WAITING";
+            this.countdown = 0;
         }
     }
     handleInput(socketId, inputData) {
@@ -411,18 +436,17 @@ class GameRoom {
             console.log(`Match won by ${winner.name}`);
             winner.socket.emit("victory", { pot: this.price * 10 });
             if (winner.walletAddress) {
-                this.reportStats(winner.walletAddress, 1, 0, this.price * 9.5); // 5% house fee
+                const winnerPayout = this.price * this.maxPlayers * (1 - HOUSE_FEE_RATE);
+                this.reportStats(winner.walletAddress, 1, 0, winnerPayout);
             }
         }
         setTimeout(() => this.resetRoom(), 10000);
     }
 
     reportStats(wallet, wins, losses, earnings) {
-        fetch(`http://${hostname}:${port}/api/game/stats`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress: wallet, wins, losses, totalEarnings: earnings, secret: process.env.INTERNAL_API_SECRET })
-        }).catch(console.error);
+        applyStatsUpdate(wallet, wins, losses, earnings).catch((error) => {
+            console.error("Failed to update stats:", error);
+        });
     }
 
     getState() {
@@ -463,23 +487,37 @@ class GameRoom {
 
 const rooms = {};
 
-// Initialize static rooms
-rooms["0"] = new GameRoom("0", 0, 50); // Lobby room: ID 0, Price 0, Max 50 players
-rooms["0"].status = "ACTIVE";
-
-["1", "2", "3", "4", "5", "6", "7", "8"].forEach(id => {
-    // Mock prices based on ID
-    const prices = { "1": 0.1, "2": 0.5, "3": 1, "4": 2, "5": 5, "6": 10, "7": 25, "8": 50 };
-    rooms[id] = new GameRoom(id, prices[id]);
+gameConfig.rooms.forEach((roomConfig) => {
+    rooms[roomConfig.id] = new GameRoom(roomConfig.id, roomConfig.price, roomConfig.maxPlayers);
+    if (roomConfig.isLobby) {
+        rooms[roomConfig.id].status = "ACTIVE";
+    }
 });
 
+function getRoomSummaries() {
+    return gameConfig.rooms.map((roomConfig) => {
+        const room = rooms[roomConfig.id];
+        return {
+            id: roomConfig.id,
+            name: roomConfig.name || `${roomConfig.price} USDC`,
+            price: roomConfig.price,
+            maxPlayers: roomConfig.maxPlayers,
+            isLobby: !!roomConfig.isLobby,
+            players: Object.keys(room.players).length,
+            status: room.status,
+        };
+    });
+}
 
 app.prepare().then(() => {
     const httpServer = createServer(async (req, res) => {
         try {
             const parsedUrl = parse(req.url, true);
             const { pathname, query } = parsedUrl;
-            if (pathname === "/a") {
+            if (pathname === "/api/rooms") {
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify(getRoomSummaries()));
+            } else if (pathname === "/a") {
                 await app.render(req, res, "/a", query);
             } else if (pathname === "/b") {
                 await app.render(req, res, "/b", query);
@@ -498,6 +536,9 @@ app.prepare().then(() => {
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id);
         let currentRoomId = null;
+        let lastInputAt = 0;
+        let lastSplitAt = 0;
+        let lastEjectAt = 0;
 
         socket.on("join-room", ({ roomId, playerData }) => {
             const room = rooms[roomId];
@@ -530,18 +571,30 @@ app.prepare().then(() => {
         });
 
         socket.on("input", (inputData) => {
+            const now = Date.now();
+            if (now - lastInputAt < 33) return;
+            lastInputAt = now;
+
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleInput(socket.id, inputData);
             }
         });
 
         socket.on("split", () => {
+            const now = Date.now();
+            if (now - lastSplitAt < 250) return;
+            lastSplitAt = now;
+
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleSplit(socket.id);
             }
         });
 
         socket.on("eject", () => {
+            const now = Date.now();
+            if (now - lastEjectAt < 150) return;
+            lastEjectAt = now;
+
             if (currentRoomId && rooms[currentRoomId]) {
                 rooms[currentRoomId].handleEject(socket.id);
             }

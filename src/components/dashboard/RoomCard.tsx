@@ -3,6 +3,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCallback } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { isRoomJoinable } from "@/lib/game/room-status";
 
 interface RoomCardProps {
     id: string;
@@ -10,7 +11,7 @@ interface RoomCardProps {
     price: number;
     players: number;
     maxPlayers: number;
-    status: "OPEN" | "FULL" | "PLAYING";
+    status: "WAITING" | "STARTING" | "ACTIVE" | "ENDED";
     isLobby?: boolean;
     onJoin: (roomId: string, price: number) => void;
 }
@@ -23,8 +24,8 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
         onJoin(id, price);
     }, [connected, onJoin, id, price]);
 
-    const isFull = players >= maxPlayers;
-    const isOpen = (status === "OPEN" || isLobby) && !isFull;
+    const isOpen = isRoomJoinable({ status, isLobby: !!isLobby, players, maxPlayers });
+    const statusLabel = isLobby ? "ACTIVE" : status;
 
     const cardStyles = isLobby
         ? "bg-gradient-to-br from-plasma-purple/20 to-neon-blue/20 border-plasma-purple/30 hover:border-neon-blue/50"
@@ -55,7 +56,7 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                         </h3>
                         <div className={`inline-flex px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest self-center md:self-auto ${isOpen ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
                             }`}>
-                            {isLobby ? "ACTIVE" : status}
+                            {statusLabel}
                         </div>
                     </div>
                     <p className="text-starlight/40 text-sm uppercase tracking-[0.2em] font-bold">
