@@ -61,8 +61,14 @@ class GameRoom {
     }
 
     addPlayer(socket, playerData) {
-        if (this.status !== "WAITING" && this.status !== "STARTING") {
-            return { error: "MATCH_IN_PROGRESS" };
+        // Lobby (id "0") always allows joining if not full
+        if (this.id !== "0" && this.status !== "WAITING" && this.status !== "STARTING") {
+            // Only allow hot-join if room is ACTIVE but not full? 
+            // The user said "people can join later on", so let's allow it for all rooms if not full.
+            if (Object.keys(this.players).length >= this.maxPlayers) {
+                return { error: "ROOM_FULL" };
+            }
+            // Allow joining active matches
         }
 
         if (Object.keys(this.players).length >= this.maxPlayers) {
@@ -77,8 +83,8 @@ class GameRoom {
             color: `hsl(${Math.random() * 360}, 100%, 50%)`,
             fragments: [{
                 id: 0,
-                x: Math.random() * MAP_WIDTH,
-                y: Math.random() * MAP_HEIGHT,
+                x: Math.random() * (MAP_WIDTH - 100) + 50,
+                y: Math.random() * (MAP_HEIGHT - 100) + 50,
                 mass: 10,
                 radius: 20,
                 vx: 0,
@@ -90,7 +96,13 @@ class GameRoom {
 
         this.updatePlayerStats(socket.id);
 
-        if (Object.keys(this.players).length >= this.maxPlayers && this.status === "WAITING") {
+        // If it's a lobby, set status to ACTIVE immediately if it's not already
+        if (this.id === "0") {
+            this.status = "ACTIVE";
+        } else if (Object.keys(this.players).length >= this.maxPlayers && this.status === "WAITING") {
+            this.startCountdown();
+        } else if (Object.keys(this.players).length >= 2 && this.status === "WAITING") {
+            // Start countdown even with 2 players to avoid waiting too long
             this.startCountdown();
         }
 
@@ -98,12 +110,19 @@ class GameRoom {
     }
 
     startCountdown() {
+        if (this.status === "STARTING") return;
         this.status = "STARTING";
         this.countdown = 10;
         const timer = setInterval(() => {
             if (this.countdown <= 0) {
                 clearInterval(timer);
                 this.startMatch();
+            }
+            const playerCount = Object.keys(this.players).length;
+            if (playerCount < 2) {
+                clearInterval(timer);
+                this.status = "WAITING";
+                this.countdown = 0;
             }
             this.countdown--;
         }, 1000);
@@ -119,11 +138,13 @@ class GameRoom {
 
     removePlayer(socketId) {
         delete this.players[socketId];
-        if (Object.keys(this.players).length < this.maxPlayers && this.status === "FULL") {
-            this.status = "OPEN";
+        // If it's NOT a lobby and we are below max, update status if was FULL
+        if (this.id !== "0") {
+            if (Object.keys(this.players).length < this.maxPlayers && this.status === "FULL") {
+                this.status = "OPEN";
+            }
         }
     }
-
     handleInput(socketId, inputData) {
         const player = this.players[socketId];
         if (player && inputData) {
@@ -206,7 +227,7 @@ class GameRoom {
 
     update() {
         const now = Date.now();
-        if (this.status === "WAITING" || this.status === "STARTING") return;
+        if (this.status === "WAITING" || this.status === "STARTING" || this.status === "ENDED") return;
 
         // Update Ejected Mass
         Object.keys(this.ejectedMass).forEach(id => {
@@ -306,7 +327,8 @@ class GameRoom {
             this.updatePlayerStats(player.id);
         });
 
-        if (this.status === "ACTIVE" && Object.keys(this.players).length === 1) {
+        // Check for WINNER only in Arena rooms
+        if (this.id !== "0" && this.status === "ACTIVE" && Object.keys(this.players).length === 1) {
             this.endMatch(Object.keys(this.players)[0]);
         }
     }
@@ -367,12 +389,6 @@ class GameRoom {
         }).catch(console.error);
     }
 
-    resetRoom() {
-        this.players = {};
-        this.status = "WAITING";
-        this.initEntities();
-    }
-
     getState() {
         const playersClean = {};
         Object.values(this.players).forEach(p => {
@@ -397,11 +413,24 @@ class GameRoom {
             winnerName: this.winnerName
         };
     }
+
+    resetRoom() {
+        this.players = {};
+        if (this.id === "0") {
+            this.status = "ACTIVE";
+        } else {
+            this.status = "WAITING";
+        }
+        this.initEntities();
+    }
 }
 
 const rooms = {};
 
 // Initialize static rooms
+rooms["0"] = new GameRoom("0", 0, 50); // Lobby room: ID 0, Price 0, Max 50 players
+rooms["0"].status = "ACTIVE";
+
 ["1", "2", "3", "4", "5", "6", "7", "8"].forEach(id => {
     // Mock prices based on ID
     const prices = { "1": 0.1, "2": 0.5, "3": 1, "4": 2, "5": 5, "6": 10, "7": 25, "8": 50 };

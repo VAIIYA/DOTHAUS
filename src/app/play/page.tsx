@@ -11,6 +11,7 @@ function PlayContent() {
     const roomId = searchParams.get("room") || "1";
     const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
 
+    const isLobby = roomId === "0";
     const playersCount = Object.keys(gameState.players).length;
 
     return (
@@ -23,54 +24,65 @@ function PlayContent() {
             />
 
             {/* UI Overlay: Top Left Info */}
-            <div className="absolute top-6 left-6 z-10 glass-panel p-4 rounded-xl border border-white/10">
-                <h2 className="text-xl font-bold text-white font-heading flex items-center gap-2">
-                    DOTHAUS <span className="text-neon-blue text-[10px] bg-neon-blue/10 px-1.5 py-0.5 rounded border border-neon-blue/20">ELIMINATION</span>
+            <div className="absolute top-6 left-6 z-10 glass-panel p-6 rounded-2xl border border-white/10 shadow-2xl">
+                <h2 className="text-xl font-bold text-white font-heading flex items-center gap-3">
+                    DOTHAUS <span className={`text-[10px] px-2 py-0.5 rounded border ${isLobby ? "bg-plasma-purple/10 text-plasma-purple border-plasma-purple/20" : "bg-neon-blue/10 text-neon-blue border-neon-blue/20"}`}>
+                        {isLobby ? "PRACTICE" : "ELIMINATION"}
+                    </span>
                 </h2>
-                <div className="mt-3 space-y-1">
-                    <p className="text-xs text-starlight/60 uppercase tracking-widest font-bold">Room Pot</p>
-                    <p className="text-2xl font-bold text-white font-heading">
-                        {(playersCount * 0.1).toFixed(2)} <span className="text-xs text-neon-blue">USDC</span>
+                <div className="mt-4 space-y-1">
+                    <p className="text-[10px] text-starlight/40 uppercase tracking-[0.2em] font-black">
+                        {isLobby ? "Current Mode" : "Room Pot"}
+                    </p>
+                    <p className="text-2xl font-black text-white font-heading italic tracking-tight">
+                        {isLobby ? (
+                            <span className="text-plasma-purple">FREE PLAY</span>
+                        ) : (
+                            <>
+                                {(playersCount * 0.1).toFixed(2)} <span className="text-xs text-neon-blue not-italic ml-1">USDC</span>
+                            </>
+                        )}
                     </p>
                 </div>
             </div>
 
             {/* Top Center: Match Status */}
-            {gameState.status === "WAITING" && (
+            {gameState.status === "WAITING" && !isLobby && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center animate-pulse">
-                    <h1 className="text-4xl font-bold text-white font-heading mb-2">WAITING FOR PLAYERS</h1>
-                    <p className="text-neon-blue tracking-[0.2em]">{playersCount} / 10 JOINED</p>
-                    <div className="mt-8 glass-panel p-4 inline-block text-xs text-starlight/50 max-w-xs">
-                        Elimination rules: Last player standing wins the pot. Use [SPACE] to split and [W] to eject mass.
+                    <h1 className="text-5xl md:text-6xl font-black text-white font-heading mb-4 italic tracking-tighter">WAITING FOR PLAYERS</h1>
+                    <p className="text-neon-blue tracking-[0.3em] font-bold text-xl">{playersCount} / 10 JOINED</p>
+                    <div className="mt-12 glass-panel p-6 rounded-2xl inline-block text-xs text-starlight/60 max-w-sm border border-white/5 backdrop-blur-xl">
+                        <p className="font-bold text-white mb-2 uppercase tracking-widest">Elimination Rules</p>
+                        Last player standing wins the pot. <br /> Use [SPACE] to split and [W] to eject mass.
                     </div>
                 </div>
             )}
 
-            {gameState.status === "STARTING" && (
+            {gameState.status === "STARTING" && !isLobby && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center">
-                    <h1 className="text-7xl font-bold text-neon-blue font-heading animate-bounce">{gameState.countdown}</h1>
-                    <p className="text-white tracking-[0.5em] mt-4 font-bold">PREPARE FOR BATTLE</p>
+                    <h1 className="text-9xl font-black text-neon-blue font-heading animate-bounce neon-text italic italic">{gameState.countdown}</h1>
+                    <p className="text-white tracking-[0.6em] mt-8 font-black text-2xl uppercase">Prepare for Battle</p>
                 </div>
             )}
 
-            {gameState.status === "ENDED" && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center glass-panel p-12 rounded-3xl border border-white/20">
-                    <h2 className="text-xs text-neon-blue uppercase tracking-[0.3em] font-bold mb-2">Match Complete</h2>
-                    <h1 className="text-4xl font-bold text-white font-heading mb-2 italic">
-                        {gameState.winnerName === gameState.players[gameState.winnerName || '']?.name ? 'VICTORY' : 'GAME OVER'}
+            {gameState.status === "ENDED" && !isLobby && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center glass-panel p-16 rounded-[2.5rem] border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+                    <h2 className="text-xs text-neon-blue uppercase tracking-[0.5em] font-black mb-4">Match Complete</h2>
+                    <h1 className="text-6xl font-black text-white font-heading mb-4 italic tracking-tighter uppercase">
+                        {gameState.winnerName === gameState.players[gameState.winnerName || '']?.name ? 'Victory' : 'Game Over'}
                     </h1>
-                    <p className="text-starlight text-sm mb-6 uppercase tracking-widest font-bold">
+                    <p className="text-starlight/60 text-lg mb-10 uppercase tracking-[0.2em] font-bold">
                         Winner: <span className="text-white">{gameState.winnerName || 'Unknown'}</span>
                     </p>
-                    <div className="p-4 bg-white/5 rounded-xl border border-white/10 mb-8 px-12">
-                        <p className="text-xs text-starlight/50 mb-1">Total Pot Payout</p>
-                        <p className="text-2xl font-bold text-neon-green">{(playersCount * 0.1 * 0.95).toFixed(2)} USDC</p>
+                    <div className="p-8 bg-white/5 rounded-2xl border border-white/10 mb-10 px-16">
+                        <p className="text-xs text-starlight/50 mb-2 uppercase tracking-widest font-black">Total Pot Payout</p>
+                        <p className="text-4xl font-black text-neon-blue italic">{(playersCount * 0.1 * 0.95).toFixed(2)} <span className="text-sm not-italic ml-1">USDC</span></p>
                     </div>
                     <button
                         onClick={() => window.location.reload()}
-                        className="btn-neon px-8 py-3 rounded-full text-sm font-bold"
+                        className="w-full py-4 bg-neon-blue text-deep-space rounded-xl text-lg font-black uppercase tracking-[0.2em] hover:bg-white hover:shadow-[0_0_30px_rgba(0,243,255,0.5)] transition-all active:scale-95"
                     >
-                        JOIN NEXT MATCH
+                        Join Next Match
                     </button>
                 </div>
             )}
