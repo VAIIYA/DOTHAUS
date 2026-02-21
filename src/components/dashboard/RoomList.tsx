@@ -58,7 +58,7 @@ export const RoomList = () => {
         if (rooms.length > 0) return rooms;
         return GAME_CONFIG.rooms.map((room) => ({
             id: room.id,
-            name: room.name || `${room.price} USDC`,
+            name: room.name || `${room.price} SOL`,
             price: room.price,
             players: 0,
             maxPlayers: room.maxPlayers,
@@ -69,10 +69,13 @@ export const RoomList = () => {
         }));
     }, [rooms]);
 
-    const handleJoin = (roomId: string, price: number, spectate?: boolean) => {
-        console.log(`Joining room ${roomId} for ${price} USDC`);
+    const handleJoin = (roomId: string, price: number, spectate?: boolean, signature?: string) => {
+        console.log(`Joining room ${roomId} for ${price} SOL`);
         trackEvent(spectate ? "room_spectate_clicked" : "room_join_clicked", { roomId, price });
-        router.push(spectate ? `/play?room=${roomId}&spectate=1` : `/play?room=${roomId}`);
+        let url = `/play?room=${roomId}`;
+        if (spectate) url += `&spectate=1`;
+        if (signature) url += `&sig=${signature}`;
+        router.push(url);
     };
 
     return (

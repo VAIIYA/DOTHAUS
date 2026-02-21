@@ -7,6 +7,7 @@ const next = require("next");
 const { Server } = require("socket.io");
 const { createClient } = require("@libsql/client");
 const gameConfig = require("./src/config/game-config.json");
+const { verifyPayment, sendPayout } = require("./src/lib/solana.js");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOST || "0.0.0.0";
@@ -54,6 +55,7 @@ class GameRoom {
         this.status = "WAITING"; // WAITING, STARTING, ACTIVE, ENDED
         this.countdown = 0;
         this.winnerName = null;
+        this.queuedPlayers = {};
         this.initEntities();
     }
 
@@ -91,15 +93,21 @@ class GameRoom {
     addPlayer(socket, playerData) {
         // Lobby (id "0") always allows joining if not full
         if (this.id !== "0" && this.status !== "WAITING" && this.status !== "STARTING") {
-            // Only allow hot-join if room is ACTIVE but not full? 
-            // The user said "people can join later on", so let's allow it for all rooms if not full.
-            if (Object.keys(this.players).length >= this.maxPlayers) {
+            // Room is ACTIVE or ENDED -> Join queue
+            if (Object.keys(this.players).length + Object.keys(this.queuedPlayers).length >= this.maxPlayers) {
                 return { error: "ROOM_FULL" };
             }
-            // Allow joining active matches
+
+            this.queuedPlayers[socket.id] = {
+                id: socket.id,
+                name: playerData.name || "Player",
+                walletAddress: playerData.walletAddress || null,
+                socket: socket,
+            };
+            return { isQueued: true };
         }
 
-        if (Object.keys(this.players).length >= this.maxPlayers) {
+        if (Object.keys(this.players).length + Object.keys(this.queuedPlayers).length >= this.maxPlayers) {
             return { error: "ROOM_FULL" };
         }
 
@@ -156,7 +164,7 @@ class GameRoom {
     startCountdown() {
         if (this.status === "STARTING") return;
         this.status = "STARTING";
-        this.countdown = 10;
+        this.countdown = 30;
         const timer = setInterval(() => {
             if (this.countdown <= 0) {
                 clearInterval(timer);
@@ -182,6 +190,7 @@ class GameRoom {
 
     removePlayer(socketId) {
         delete this.players[socketId];
+        delete this.queuedPlayers[socketId];
         if (this.id !== "0" && this.status === "STARTING" && Object.keys(this.players).length < 2) {
             this.status = "WAITING";
             this.countdown = 0;
@@ -441,6 +450,10 @@ class GameRoom {
             if (winner.walletAddress) {
                 const winnerPayout = this.price * this.maxPlayers * (1 - HOUSE_FEE_RATE);
                 this.reportStats(winner.walletAddress, 1, 0, winnerPayout);
+
+                sendPayout(winner.walletAddress, this.price * this.maxPlayers).catch(e => {
+                    console.error("Payout encountered error:", e);
+                });
             }
         }
         setTimeout(() => this.resetRoom(), 10000);
@@ -473,7 +486,8 @@ class GameRoom {
             mapHeight: MAP_HEIGHT,
             status: this.status,
             countdown: this.countdown,
-            winnerName: this.winnerName
+            winnerName: this.winnerName,
+            queuedCount: Object.keys(this.queuedPlayers).length
         };
     }
 
@@ -485,6 +499,16 @@ class GameRoom {
             this.status = "WAITING";
         }
         this.initEntities();
+
+        const queuedSocketIds = Object.keys(this.queuedPlayers);
+        if (queuedSocketIds.length > 0) {
+            queuedSocketIds.forEach(socketId => {
+                const qb = this.queuedPlayers[socketId];
+                this.addPlayer(qb.socket, { name: qb.name, walletAddress: qb.walletAddress });
+                qb.socket.emit("queued-to-active", this.id);
+            });
+            this.queuedPlayers = {};
+        }
     }
 }
 
@@ -504,11 +528,11 @@ function getRoomSummaries() {
         const room = rooms[roomConfig.id];
         return {
             id: roomConfig.id,
-            name: roomConfig.name || `${roomConfig.price} USDC`,
+            name: roomConfig.name || `${roomConfig.price} SOL`,
             price: roomConfig.price,
             maxPlayers: roomConfig.maxPlayers,
             isLobby: !!roomConfig.isLobby,
-            players: Object.keys(room.players).length,
+            players: Object.keys(room.players).length + Object.keys(room.queuedPlayers).length,
             status: room.status,
             region: ROOM_REGION,
             updatedAt: nowIso,
@@ -549,7 +573,7 @@ app.prepare().then(() => {
         let lastEjectAt = 0;
         let lastJoinAt = 0;
 
-        socket.on("join-room", ({ roomId, playerData, spectator }) => {
+        socket.on("join-room", async ({ roomId, playerData, spectator, signature }) => {
             const now = Date.now();
             if (now - lastJoinAt < 100) {
                 socket.emit("error", "JOIN_RATE_LIMITED");
@@ -586,6 +610,26 @@ app.prepare().then(() => {
             }
 
             isSpectator = Boolean(spectator);
+
+            // Payment Verification Logic for explicit joining
+            if (!isSpectator && roomId !== "0") {
+                if (!signature) {
+                    socket.emit("error", "PAYMENT_REQUIRED");
+                    return;
+                }
+
+                try {
+                    const isValid = await verifyPayment(signature, room.price, playerData.walletAddress);
+                    if (!isValid) {
+                        socket.emit("error", "INVALID_PAYMENT");
+                        return;
+                    }
+                } catch (e) {
+                    socket.emit("error", "PAYMENT_VERIFICATION_FAILED");
+                    return;
+                }
+            }
+
             if (isSpectator) {
                 currentRoomId = roomId;
                 socket.join(roomId);
@@ -601,6 +645,15 @@ app.prepare().then(() => {
             }
 
             const player = result;
+            if (player.isQueued) {
+                currentRoomId = roomId;
+                isSpectator = true;
+                socket.join(roomId);
+                socket.emit("spectator-joined", { roomId, isQueued: true });
+                socket.emit("game-state", room.getState());
+                return;
+            }
+
             currentRoomId = roomId;
             socket.join(roomId);
             console.log(`Player ${socket.id} joined room ${roomId}`);

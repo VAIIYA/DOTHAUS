@@ -9,12 +9,13 @@ import { useWallet } from "@solana/wallet-adapter-react";
 interface GameCanvasProps {
     roomId: string;
     spectating?: boolean;
+    signature?: string | null;
     onEngineReady?: (engine: GameEngine) => void;
     onConnectionState?: (state: "connecting" | "connected" | "error") => void;
-    onGameEvent?: (event: "game_over" | "victory", payload: { winner?: string; isLobby?: boolean; pot?: number }) => void;
+    onGameEvent?: (event: "game_over" | "victory" | "queued", payload: { winner?: string; isLobby?: boolean; pot?: number }) => void;
 }
 
-export const GameCanvas = ({ roomId, spectating, onEngineReady, onConnectionState, onGameEvent }: GameCanvasProps) => {
+export const GameCanvas = ({ roomId, spectating, signature, onEngineReady, onConnectionState, onGameEvent }: GameCanvasProps) => {
     const { publicKey } = useWallet();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
@@ -47,6 +48,17 @@ export const GameCanvas = ({ roomId, spectating, onEngineReady, onConnectionStat
         engine.start();
         engine.onGameOver = (data) => onGameEventRef.current?.("game_over", data);
         engine.onVictory = (data) => onGameEventRef.current?.("victory", data);
+
+        socket.on("spectator-joined", (data: { isQueued?: boolean }) => {
+            if (data.isQueued) {
+                onGameEventRef.current?.("queued", {});
+            }
+        });
+
+        socket.on("queued-to-active", () => {
+            // Refresh page when queued player gets promoted to active to reset their instance
+            window.location.reload();
+        });
 
         socket.on("connect", () => {
             console.log("Socket connected:", socket.id);
@@ -89,6 +101,7 @@ export const GameCanvas = ({ roomId, spectating, onEngineReady, onConnectionStat
             socket.emit("join-room", {
                 roomId,
                 spectator: !!spectating,
+                signature: signature,
                 playerData: {
                     name: publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Guest",
                     walletAddress: publicKey?.toBase58() || null

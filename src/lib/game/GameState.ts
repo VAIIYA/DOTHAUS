@@ -52,6 +52,7 @@ export interface GameState {
     status: "WAITING" | "STARTING" | "ACTIVE" | "ENDED";
     countdown: number;
     winnerName?: string | null;
+    queuedCount?: number;
 }
 
 export const INITIAL_STATE: GameState = {
@@ -63,4 +64,5 @@ export const INITIAL_STATE: GameState = {
     mapHeight: 3000,
     status: "WAITING",
     countdown: 0,
+    queuedCount: 0,
 };

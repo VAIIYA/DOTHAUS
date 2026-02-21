@@ -17,11 +17,13 @@ function PlayContent() {
     const { connected } = useWallet();
     const roomId = searchParams.get("room") || "1";
     const spectating = searchParams.get("spectate") === "1";
+    const signature = searchParams.get("sig");
 
     const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
     const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
     const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "error">("connecting");
     const [isTimedOut, setIsTimedOut] = useState(false);
+    const [isQueued, setIsQueued] = useState(false);
 
     const engineRef = useRef<GameEngine | null>(null);
     const prevStatusRef = useRef<GameState["status"]>(INITIAL_STATE.status);
@@ -73,6 +75,7 @@ function PlayContent() {
             <GameCanvas
                 roomId={roomId}
                 spectating={spectating}
+                signature={signature}
                 onConnectionState={(state) => {
                     setConnectionState(state);
                     if (state === "connected") {
@@ -95,6 +98,10 @@ function PlayContent() {
                             wins: 1,
                             totalEarnings: Number(payload.pot || 0),
                         });
+                    }
+
+                    if (event === "queued") {
+                        setIsQueued(true);
                     }
                 }}
                 onEngineReady={(engine) => {
@@ -151,12 +158,25 @@ function PlayContent() {
                             <span className="text-purple-700">FREE PLAY</span>
                         ) : (
                             <>
-                                {totalPot.toFixed(2)} <span className="text-xs text-vaiiya-orange ml-1">USDC</span>
+                                {totalPot.toFixed(5)} <span className="text-xs text-vaiiya-orange ml-1">SOL</span>
                             </>
                         )}
                     </p>
                 </div>
             </div>
+
+            {/* Queued State Overlay */}
+            {isQueued && gameState.status === "ACTIVE" && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 text-center bg-white/95 backdrop-blur-md p-10 rounded-[2rem] border border-gray-200 shadow-xl max-w-sm w-full">
+                    <h2 className="text-xl font-bold text-vaiiya-indigo mb-2 uppercase tracking-wide">Queue Position Locked</h2>
+                    <p className="text-gray-500 text-sm mb-6">You will enter the arena automatically when the next match begins.</p>
+                    <div className="flex justify-center items-center gap-2">
+                        <div className="w-2 h-2 bg-vaiiya-orange rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                        <div className="w-2 h-2 bg-vaiiya-orange rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                        <div className="w-2 h-2 bg-vaiiya-orange rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    </div>
+                </div>
+            )}
 
             {/* Top Center: Match Status */}
             {gameState.status === "WAITING" && !isLobby && (
@@ -188,7 +208,7 @@ function PlayContent() {
                     </p>
                     <div className="p-8 bg-orange-50/50 rounded-3xl border border-orange-100 mb-10 md:px-16">
                         <p className="text-xs text-vaiiya-orange mb-2 uppercase tracking-widest font-bold">Total Pot Payout</p>
-                        <p className="text-4xl font-bold text-vaiiya-indigo">{winnerPayout.toFixed(2)} <span className="text-sm ml-1 text-gray-500">USDC</span></p>
+                        <p className="text-4xl font-bold text-vaiiya-indigo">{winnerPayout.toFixed(5)} <span className="text-sm ml-1 text-gray-500">SOL</span></p>
                     </div>
                     <button
                         onClick={() => window.location.reload()}

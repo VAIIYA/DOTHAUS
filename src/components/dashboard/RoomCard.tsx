@@ -1,9 +1,10 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useCallback } from "react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useCallback, useState } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { isRoomJoinable } from "@/lib/game/room-status";
+import { Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 interface RoomCardProps {
     id: string;
@@ -15,21 +16,55 @@ interface RoomCardProps {
     isLobby?: boolean;
     region?: string;
     updatedAt?: string;
-    onJoin: (roomId: string, price: number, spectate?: boolean) => void;
+    onJoin: (roomId: string, price: number, spectate?: boolean, signature?: string) => void;
 }
 
 export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby, region, updatedAt, onJoin }: RoomCardProps) => {
-    const { connected } = useWallet();
+    const { connected, publicKey, sendTransaction } = useWallet();
+    const { connection } = useConnection();
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleJoin = useCallback(() => {
-        onJoin(id, price);
-    }, [onJoin, id, price]);
+    const handleJoin = useCallback(async () => {
+        if (isLobby) {
+            onJoin(id, price);
+            return;
+        }
+
+        if (!publicKey) return;
+
+        try {
+            setIsProcessing(true);
+            const brokerEnv = process.env.NEXT_PUBLIC_BROKER_WALLET;
+            if (!brokerEnv) throw new Error("Broker wallet not configured.");
+
+            const brokerWallet = new PublicKey(brokerEnv);
+            const fee = 0.0005;
+            const lamports = Math.floor((price + fee) * LAMPORTS_PER_SOL);
+            const transaction = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: brokerWallet,
+                    lamports
+                })
+            );
+
+            const signature = await sendTransaction(transaction, connection);
+            console.log("Payment sent:", signature);
+            onJoin(id, price, false, signature);
+        } catch (e) {
+            console.error("Payment failed", e);
+            alert("Payment was cancelled or failed. Cannot join arena.");
+        } finally {
+            setIsProcessing(false);
+        }
+    }, [onJoin, id, price, isLobby, publicKey, connection, sendTransaction]);
     const handleSpectate = useCallback(() => {
         onJoin(id, price, true);
     }, [onJoin, id, price]);
 
     const isOpen = isRoomJoinable({ status, isLobby: !!isLobby, players, maxPlayers });
     const statusLabel = isLobby ? "ACTIVE" : status;
+    const isQueuing = status === "ACTIVE" && !isLobby && isOpen;
 
     const cardStyles = isLobby
         ? "bg-white shadow-sm border border-gray-200"
@@ -54,7 +89,7 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                 <div className={`flex-1 text-center ${isLobby ? "md:text-left" : ""}`}>
                     <div className={`flex flex-col ${isLobby ? "md:flex-row md:items-center" : "items-center"} gap-3 mb-2`}>
                         <h3 className="text-3xl md:text-4xl font-bold font-serif text-vaiiya-indigo tracking-tight">
-                            {isLobby ? name : `${price} USDC`}
+                            {isLobby ? name : `${price} SOL`}
                         </h3>
                         <div className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider self-center md:self-auto ${isOpen ? "bg-green-100 text-green-700 border border-green-200" : "bg-red-100 text-red-700 border border-red-200"
                             }`}>
@@ -62,7 +97,7 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                         </div>
                     </div>
                     <p className="text-gray-500 text-sm font-medium">
-                        {isLobby ? "Join anytime • Play freely • No Stakes" : "Competitive Arena • Winner takes all"}
+                        {isLobby ? "Join anytime • Play freely • No Stakes" : "Competitive Arena • Entry includes 0.0005 SOL network fee"}
                     </p>
                     <p className="text-gray-400 text-xs mt-2 uppercase tracking-wide">
                         {region || "Auto"} · {updatedAt ? new Date(updatedAt).toLocaleTimeString() : "Live"}
@@ -91,15 +126,15 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                 <div className={`flex flex-col gap-2 w-full ${isLobby ? "md:w-auto" : ""}`}>
                     <button
                         onClick={handleJoin}
-                        disabled={!isOpen}
-                        className={`w-full md:px-10 py-4 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform active:scale-95 ${isOpen
+                        disabled={!isOpen || isProcessing}
+                        className={`w-full md:px-10 py-4 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform active:scale-95 ${isOpen && !isProcessing
                             ? isLobby
                                 ? "bg-vaiiya-orange text-white hover:bg-orange-600 hover:shadow-md"
                                 : "bg-vaiiya-indigo text-white hover:bg-purple-900 hover:shadow-md"
                             : "bg-gray-100 text-gray-400 cursor-not-allowed"
                             }`}
                     >
-                        {isOpen ? (isLobby ? "Enter Practice" : connected ? "Join Arena" : "Play as Guest") : "Unavailable"}
+                        {isProcessing ? "Processing..." : isOpen ? (isLobby ? "Enter Practice" : isQueuing ? "Join Queue" : connected ? "Pay & Join Arena" : "Play as Guest") : "Unavailable"}
                     </button>
                     {!isOpen && (
                         <button
