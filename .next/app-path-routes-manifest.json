@@ -1,8 +1,11 @@
 {
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
+  "/api/analytics/route": "/api/analytics",
   "/api/game/stats/route": "/api/game/stats",
   "/api/leaderboard/route": "/api/leaderboard",
+  "/api/user/claim-session/route": "/api/user/claim-session",
+  "/api/user/nonce/route": "/api/user/nonce",
   "/api/user/route": "/api/user",
   "/favicon.ico/route": "/favicon.ico",
   "/page": "/",

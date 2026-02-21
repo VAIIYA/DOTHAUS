@@ -1,8 +1,11 @@
 {
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/analytics/route": "app/api/analytics/route.js",
   "/api/game/stats/route": "app/api/game/stats/route.js",
   "/api/leaderboard/route": "app/api/leaderboard/route.js",
+  "/api/user/claim-session/route": "app/api/user/claim-session/route.js",
+  "/api/user/nonce/route": "app/api/user/nonce/route.js",
   "/api/user/route": "app/api/user/route.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
   "/page": "app/page.js",
