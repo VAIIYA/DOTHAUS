@@ -215,8 +215,9 @@ class GameRoom {
 
                 // Direction to mouse
                 const direction = this.getUnitVector(frag.x, frag.y, player.target.x, player.target.y);
-                const vx = direction.x * 15;
-                const vy = direction.y * 15;
+                // Agar.io split launch burst
+                const vx = direction.x * 25;
+                const vy = direction.y * 25;
 
                 newFragments.push({
                     id: Date.now() + Math.random(),
@@ -299,9 +300,10 @@ class GameRoom {
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance > 1) {
-                    const speed = Math.max(1, 4 / Math.sqrt(frag.mass / 10));
-                    frag.x += (dx / distance) * speed;
-                    frag.y += (dy / distance) * speed;
+                    // Agario speed-mass inverse curve
+                    const speed = 12 * Math.pow(frag.mass, -0.439);
+                    frag.x += (dx / distance) * Math.max(0.5, speed);
+                    frag.y += (dy / distance) * Math.max(0.5, speed);
                 }
 
                 // Bounds

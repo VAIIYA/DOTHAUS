@@ -199,19 +199,30 @@ export class GameEngine {
         if (this.myPlayerId && this.state.players[this.myPlayerId]) {
             const player = this.state.players[this.myPlayerId];
 
-            let avgX = 0, avgY = 0, maxRadius = 0;
+            let avgX = 0, avgY = 0;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
             player.fragments.forEach(f => {
                 avgX += f.x;
                 avgY += f.y;
-                if (f.radius > maxRadius) maxRadius = f.radius;
+                minX = Math.min(minX, f.x - f.radius);
+                minY = Math.min(minY, f.y - f.radius);
+                maxX = Math.max(maxX, f.x + f.radius);
+                maxY = Math.max(maxY, f.y + f.radius);
             });
             avgX /= player.fragments.length;
             avgY /= player.fragments.length;
 
-            this.camera.x += (avgX - this.camera.x) * 0.15; // Slightly faster camera
+            this.camera.x += (avgX - this.camera.x) * 0.15;
             this.camera.y += (avgY - this.camera.y) * 0.15;
 
-            const targetScale = Math.max(0.05, 0.8 / (maxRadius / 20));
+            // Scale to fit all fragments bounding box
+            const boxWidth = maxX - minX;
+            const boxHeight = maxY - minY;
+            const maxSize = Math.max(boxWidth, boxHeight);
+
+            // Adjust zoom factor based on the furthest spread of the blobs
+            const targetScale = Math.max(0.05, 0.8 / (maxSize / 40 || 1));
             this.camera.scale += (targetScale - this.camera.scale) * 0.05;
         } else {
             // Drift camera to map center if dead or observing
