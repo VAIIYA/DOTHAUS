@@ -270,7 +270,7 @@ export class GameEngine {
         const { ctx } = this;
 
         // Clear screen
-        ctx.fillStyle = "#02040a"; // Even deeper space
+        ctx.fillStyle = "#F9FAFB"; // Vaiiya Off-white
         ctx.fillRect(0, 0, width, height);
 
         ctx.save();
@@ -281,7 +281,7 @@ export class GameEngine {
         ctx.translate(-this.camera.x, -this.camera.y);
 
         // Draw Map Boundaries
-        ctx.strokeStyle = "rgba(0, 243, 255, 0.2)";
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
         ctx.lineWidth = 10;
         ctx.strokeRect(-5, -5, this.state.mapWidth + 10, this.state.mapHeight + 10);
 
@@ -314,7 +314,7 @@ export class GameEngine {
 
     private drawGrid() {
         const step = 100; // Larger grid
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+        this.ctx.strokeStyle = "rgba(0, 0, 0, 0.05)";
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
 
@@ -336,10 +336,15 @@ export class GameEngine {
         this.ctx.fill();
 
         // Add a highlight
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         this.ctx.beginPath();
         this.ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.2, 0, Math.PI * 2);
         this.ctx.fill();
+
+        // Add subtle stroke
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
     }
 
     private drawVirus(x: number, y: number, radius: number) {
@@ -350,11 +355,10 @@ export class GameEngine {
         const pulse = 1 + Math.sin(performance.now() * 0.005) * 0.05;
         const r = radius * pulse;
 
-        ctx.fillStyle = "rgba(51, 255, 51, 0.8)";
-        ctx.strokeStyle = "#22aa22";
+        ctx.fillStyle = "#33FF33";
+        ctx.strokeStyle = "#22AA22";
         ctx.lineWidth = 4;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = "#33ff33";
+        ctx.shadowBlur = 0; // Removed neon glow
 
         ctx.beginPath();
         const spikes = 18;
@@ -379,26 +383,24 @@ export class GameEngine {
             // Cell Body Gradient
             const gradient = ctx.createRadialGradient(frag.x, frag.y, 0, frag.x, frag.y, frag.radius);
             gradient.addColorStop(0, player.color);
-            gradient.addColorStop(1, this.shadeColor(player.color, -20));
+            gradient.addColorStop(1, this.shadeColor(player.color, -10));
 
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(frag.x, frag.y, frag.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Neon Border
-            ctx.shadowBlur = isMe ? 25 : 15;
-            ctx.shadowColor = player.color;
-            ctx.strokeStyle = isMe ? "rgba(255, 255, 255, 0.8)" : "rgba(255, 255, 255, 0.3)";
-            ctx.lineWidth = isMe ? 4 : 2;
+            // Flat Border
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = this.shadeColor(player.color, -30);
+            ctx.lineWidth = Math.max(2, frag.radius * 0.05);
             ctx.stroke();
 
-            // Interior Glow
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = frag.radius * 0.1;
+            // Interior Flat Highlight instead of glow
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.beginPath();
-            ctx.arc(frag.x, frag.y, frag.radius * 0.8, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.arc(frag.x - frag.radius * 0.2, frag.y - frag.radius * 0.2, frag.radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
 
             ctx.restore();
         });
@@ -410,13 +412,13 @@ export class GameEngine {
         avgY /= player.fragments.length;
 
         ctx.fillStyle = "#ffffff";
-        ctx.font = `bold ${Math.max(12, 14)}px "Orbitron", sans-serif`;
+        ctx.font = `bold ${Math.max(12, 14)}px "Inter", sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.shadowBlur = 5;
-        ctx.shadowColor = "black";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#3D065F"; // Vaiiya Indigo outline for legibility
+        ctx.strokeText(player.name, avgX, avgY);
         ctx.fillText(player.name, avgX, avgY);
-        ctx.shadowBlur = 0;
     }
 
     private shadeColor(color: string, percent: number) {

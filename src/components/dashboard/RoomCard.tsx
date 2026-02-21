@@ -32,22 +32,20 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
     const statusLabel = isLobby ? "ACTIVE" : status;
 
     const cardStyles = isLobby
-        ? "bg-gradient-to-br from-plasma-purple/20 to-neon-blue/20 border-plasma-purple/30 hover:border-neon-blue/50"
-        : "glass-panel hover:bg-white/5";
+        ? "bg-white shadow-sm border border-gray-200"
+        : "bg-white shadow-sm border border-gray-100 hover:border-vaiiya-orange/50 hover:shadow-md";
 
-    const glowStyles = isLobby
-        ? "group-hover:from-plasma-purple/30 group-hover:to-neon-blue/30"
-        : "group-hover:from-neon-blue/10 group-hover:to-plasma-purple/10";
+    const glowStyles = "hidden"; // Removed glow layer
 
     return (
-        <div className={`relative group p-8 rounded-3xl transition-all duration-500 hover:scale-[1.02] flex flex-col ${isLobby ? "md:flex-row" : ""} items-center justify-between gap-8 border ${cardStyles}`}>
+        <div className={`relative group p-8 rounded-3xl transition-all duration-500 hover:scale-[1.02] flex flex-col ${isLobby ? "md:flex-row" : ""} items-center justify-between gap-8 ${cardStyles}`}>
             {/* Glow Effect */}
             <div className={`absolute inset-0 bg-gradient-to-br from-transparent to-transparent rounded-3xl transition-all duration-500 ${glowStyles}`} />
 
             <div className={`relative z-10 flex flex-col ${isLobby ? "md:flex-row" : ""} flex-1 items-center gap-8 w-full`}>
                 {/* Visual Icon/Badge */}
-                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center shrink-0 ${isLobby ? "bg-plasma-purple/20 text-plasma-purple" : "bg-neon-blue/20 text-neon-blue"}`}>
-                    <span className="text-4xl font-black italic tracking-tighter">
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center shrink-0 ${isLobby ? "bg-vaiiya-orange/10 text-vaiiya-orange" : "bg-gray-100 text-vaiiya-indigo"}`}>
+                    <span className="text-4xl font-black tracking-tight">
                         {isLobby ? "P" : price}
                     </span>
                 </div>
@@ -55,33 +53,33 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                 {/* Info Section */}
                 <div className={`flex-1 text-center ${isLobby ? "md:text-left" : ""}`}>
                     <div className={`flex flex-col ${isLobby ? "md:flex-row md:items-center" : "items-center"} gap-3 mb-2`}>
-                        <h3 className="text-3xl md:text-4xl font-black italic font-heading text-white tracking-tight uppercase">
+                        <h3 className="text-3xl md:text-4xl font-bold font-serif text-vaiiya-indigo tracking-tight">
                             {isLobby ? name : `${price} USDC`}
                         </h3>
-                        <div className={`inline-flex px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest self-center md:self-auto ${isOpen ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+                        <div className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider self-center md:self-auto ${isOpen ? "bg-green-100 text-green-700 border border-green-200" : "bg-red-100 text-red-700 border border-red-200"
                             }`}>
                             {statusLabel}
                         </div>
                     </div>
-                    <p className="text-starlight/40 text-sm uppercase tracking-[0.2em] font-bold">
+                    <p className="text-gray-500 text-sm font-medium">
                         {isLobby ? "Join anytime • Play freely • No Stakes" : "Competitive Arena • Winner takes all"}
                     </p>
-                    <p className="text-starlight/30 text-[10px] uppercase tracking-[0.2em] mt-2">
+                    <p className="text-gray-400 text-xs mt-2 uppercase tracking-wide">
                         {region || "Auto"} · {updatedAt ? new Date(updatedAt).toLocaleTimeString() : "Live"}
                     </p>
                 </div>
 
                 {/* Progress Section */}
                 <div className="w-full md:w-48 space-y-2">
-                    <div className="flex justify-between text-xs font-black uppercase tracking-widest text-starlight/60">
+                    <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-gray-500">
                         <span>Players</span>
-                        <span className={players >= maxPlayers ? "text-red-400" : "text-neon-blue"}>
+                        <span className={players >= maxPlayers ? "text-red-500" : "text-vaiiya-indigo"}>
                             {players} / {maxPlayers}
                         </span>
                     </div>
-                    <div className="w-full h-3 bg-void-black/50 rounded-full overflow-hidden border border-white/5 p-[2px]">
+                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                         <div
-                            className={`h-full rounded-full transition-all duration-1000 ease-out ${isLobby ? "bg-plasma-purple shadow-[0_0_15px_rgba(188,19,254,0.5)]" : "bg-neon-blue shadow-[0_0_15px_rgba(0,243,255,0.5)]"}`}
+                            className={`h-full rounded-full transition-all duration-1000 ease-out bg-vaiiya-orange`}
                             style={{ width: `${(players / maxPlayers) * 100}%` }}
                         />
                     </div>
@@ -94,11 +92,11 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                     <button
                         onClick={handleJoin}
                         disabled={!isOpen}
-                        className={`w-full md:px-10 py-4 rounded-xl font-black uppercase tracking-[0.15em] transition-all duration-300 transform active:scale-95 ${isOpen
+                        className={`w-full md:px-10 py-4 rounded-full font-bold uppercase tracking-wider transition-all duration-300 transform active:scale-95 ${isOpen
                             ? isLobby
-                                ? "bg-plasma-purple text-white hover:bg-white hover:text-plasma-purple hover:shadow-[0_0_30px_rgba(188,19,254,0.4)]"
-                                : "bg-neon-blue text-deep-space hover:bg-white hover:shadow-[0_0_30px_rgba(0,243,255,0.4)]"
-                            : "bg-white/5 text-starlight/20 cursor-not-allowed grayscale"
+                                ? "bg-vaiiya-orange text-white hover:bg-orange-600 hover:shadow-md"
+                                : "bg-vaiiya-indigo text-white hover:bg-purple-900 hover:shadow-md"
+                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
                             }`}
                     >
                         {isOpen ? (isLobby ? "Enter Practice" : connected ? "Join Arena" : "Play as Guest") : "Unavailable"}
@@ -106,24 +104,24 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                     {!isOpen && (
                         <button
                             onClick={handleSpectate}
-                            className="w-full md:px-10 py-3 rounded-xl border border-neon-blue/40 text-neon-blue font-black uppercase tracking-[0.15em]"
+                            className="w-full md:px-10 py-3 rounded-full border-2 border-vaiiya-indigo text-vaiiya-indigo font-bold uppercase tracking-wider hover:bg-gray-50"
                         >
                             Spectate
                         </button>
                     )}
                     {!connected && (
                         <div className="opacity-90 hover:opacity-100 transition-opacity transform hover:scale-[1.02]">
-                        <WalletMultiButton style={{
-                            width: '100%',
-                            height: '48px',
-                            justifyContent: 'center',
-                            backgroundColor: '#bc13fe',
-                            borderRadius: '12px',
-                            fontWeight: '900',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.15em'
-                        }} />
-                    </div>
+                            <WalletMultiButton style={{
+                                width: '100%',
+                                height: '48px',
+                                justifyContent: 'center',
+                                backgroundColor: '#FF5C16', // Vaiiya Orange
+                                borderRadius: '9999px',
+                                fontWeight: '700',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }} />
+                        </div>
                     )}
                 </div>
             </div>

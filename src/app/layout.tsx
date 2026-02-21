@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a12",
+  themeColor: "#F9FAFB",
 };
 
 import { SolanaProvider } from "@/context/SolanaProvider";
@@ -44,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${orbitron.variable} ${inter.variable} antialiased font-sans bg-deep-space text-white overflow-hidden`}
+        className={`${orbitron.variable} ${inter.variable} antialiased font-sans bg-vaiiya-bg text-vaiiya-indigo overflow-hidden`}
       >
         <ServiceWorkerRegistration />
         <SolanaProvider>{children}</SolanaProvider>

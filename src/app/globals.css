@@ -3,31 +3,28 @@
 @theme {
   --font-orbitron: var(--font-orbitron);
   --font-inter: var(--font-inter);
-  
+
   --font-sans: var(--font-inter);
   --font-heading: var(--font-orbitron);
 
-  --color-deep-space: #0a0a12;
-  --color-neon-blue: #00f3ff;
-  --color-plasma-purple: #bc13fe;
-  --color-void-black: #050508;
-  --color-starlight: #e2e8f0;
+  --color-vaiiya-bg: #F9FAFB;
+  --color-vaiiya-indigo: #3D065F;
+  --color-vaiiya-orange: #FF5C16;
+  --color-starlight: #6B7280;
+  /* Gray-500 for secondary text */
 }
 
 @utility glass-panel {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-@utility neon-text {
-  text-shadow: 0 0 5px theme('colors.neon-blue'), 0 0 10px theme('colors.neon-blue');
-}
 
 body {
-  background: var(--color-deep-space);
-  color: var(--color-starlight);
+  background: var(--color-vaiiya-bg);
+  color: var(--color-vaiiya-indigo);
   font-family: var(--font-inter);
 }
 
@@ -35,13 +32,16 @@ body {
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: var(--color-deep-space);
+  background: var(--color-vaiiya-bg);
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-plasma-purple);
+  background: var(--color-starlight);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-neon-blue);
+  background: var(--color-vaiiya-orange);
 }

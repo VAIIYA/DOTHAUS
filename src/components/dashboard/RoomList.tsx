@@ -79,15 +79,15 @@ export const RoomList = () => {
         <section id="rooms" className="py-20 px-6 relative z-10">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-16 text-center">
-                    <h2 className="text-5xl md:text-7xl font-black italic font-heading mb-6 text-white tracking-tighter">
-                        BATTLE <span className="text-neon-blue neon-text">ARENAS</span>
+                    <h2 className="text-5xl md:text-7xl font-bold font-serif mb-6 text-vaiiya-indigo tracking-tight">
+                        BATTLE ARENAS
                     </h2>
-                    <p className="text-starlight/60 max-w-2xl mx-auto text-lg md:text-xl font-light">
+                    <p className="text-starlight max-w-2xl mx-auto text-lg md:text-xl font-medium">
                         Select your stake. Winner takes the pot (minus 5% house fee).
                         <br />
-                        <span className="text-plasma-purple font-bold">New: Practice Arena is now open for free play!</span>
+                        <span className="text-vaiiya-orange font-bold mt-2 inline-block">New: Practice Arena is now open for free play!</span>
                     </p>
-                    <div className="mt-4 text-xs uppercase tracking-[0.2em] text-starlight/50 font-bold">
+                    <div className="mt-6 text-xs font-semibold text-gray-400">
                         Region: {displayRooms[0]?.region || "Auto"} · Ping: {pingMs ?? "--"}ms · Updated: {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString() : "--"}
                     </div>
                 </div>
