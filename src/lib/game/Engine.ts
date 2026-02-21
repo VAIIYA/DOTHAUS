@@ -10,7 +10,7 @@ export class GameEngine {
     private stateTime: number = 0;
     private socket: Socket;
     private animationId: number | null = null;
-    private camera: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 };
+    private camera: { x: number; y: number; scale: number };
 
     // Local player ID
     public myPlayerId: string | null = null;
@@ -27,6 +27,7 @@ export class GameEngine {
         this.state = initialState;
         this.lastState = initialState;
         this.socket = socket;
+        this.camera = { x: initialState.mapWidth / 2, y: initialState.mapHeight / 2, scale: 0.1 };
 
         // Handle resizing
         window.addEventListener("resize", this.handleResize);
@@ -212,6 +213,11 @@ export class GameEngine {
 
             const targetScale = Math.max(0.05, 0.8 / (maxRadius / 20));
             this.camera.scale += (targetScale - this.camera.scale) * 0.05;
+        } else {
+            // Drift camera to map center if dead or observing
+            this.camera.x += (this.state.mapWidth / 2 - this.camera.x) * 0.05;
+            this.camera.y += (this.state.mapHeight / 2 - this.camera.y) * 0.05;
+            this.camera.scale += (0.1 - this.camera.scale) * 0.05;
         }
     }
 

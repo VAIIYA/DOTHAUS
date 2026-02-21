@@ -40,11 +40,11 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
         : "group-hover:from-neon-blue/10 group-hover:to-plasma-purple/10";
 
     return (
-        <div className={`relative group p-8 rounded-3xl transition-all duration-500 hover:scale-[1.02] flex flex-col md:flex-row items-center justify-between gap-8 border ${cardStyles}`}>
+        <div className={`relative group p-8 rounded-3xl transition-all duration-500 hover:scale-[1.02] flex flex-col ${isLobby ? "md:flex-row" : ""} items-center justify-between gap-8 border ${cardStyles}`}>
             {/* Glow Effect */}
             <div className={`absolute inset-0 bg-gradient-to-br from-transparent to-transparent rounded-3xl transition-all duration-500 ${glowStyles}`} />
 
-            <div className="relative z-10 flex flex-col md:flex-row flex-1 items-center gap-8 w-full">
+            <div className={`relative z-10 flex flex-col ${isLobby ? "md:flex-row" : ""} flex-1 items-center gap-8 w-full`}>
                 {/* Visual Icon/Badge */}
                 <div className={`w-20 h-20 rounded-2xl flex items-center justify-center shrink-0 ${isLobby ? "bg-plasma-purple/20 text-plasma-purple" : "bg-neon-blue/20 text-neon-blue"}`}>
                     <span className="text-4xl font-black italic tracking-tighter">
@@ -53,8 +53,8 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
                 </div>
 
                 {/* Info Section */}
-                <div className="flex-1 text-center md:text-left">
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 mb-2">
+                <div className={`flex-1 text-center ${isLobby ? "md:text-left" : ""}`}>
+                    <div className={`flex flex-col ${isLobby ? "md:flex-row md:items-center" : "items-center"} gap-3 mb-2`}>
                         <h3 className="text-3xl md:text-4xl font-black italic font-heading text-white tracking-tight uppercase">
                             {isLobby ? name : `${price} USDC`}
                         </h3>
@@ -89,8 +89,8 @@ export const RoomCard = ({ id, name, price, players, maxPlayers, status, isLobby
             </div>
 
             {/* Action Section */}
-            <div className="relative z-10 shrink-0 w-full md:w-auto">
-                <div className="flex flex-col gap-2 w-full md:w-auto">
+            <div className={`relative z-10 shrink-0 w-full ${isLobby ? "md:w-auto" : ""}`}>
+                <div className={`flex flex-col gap-2 w-full ${isLobby ? "md:w-auto" : ""}`}>
                     <button
                         onClick={handleJoin}
                         disabled={!isOpen}

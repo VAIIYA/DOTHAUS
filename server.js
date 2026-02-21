@@ -549,7 +549,7 @@ app.prepare().then(() => {
 
         socket.on("join-room", ({ roomId, playerData, spectator }) => {
             const now = Date.now();
-            if (now - lastJoinAt < 800) {
+            if (now - lastJoinAt < 100) {
                 socket.emit("error", "JOIN_RATE_LIMITED");
                 return;
             }
@@ -557,7 +557,7 @@ app.prepare().then(() => {
 
             const ip = socket.handshake.address || "unknown";
             const previousAttempt = joinAttemptsByIp.get(ip) || 0;
-            if (now - previousAttempt < 800) {
+            if (now - previousAttempt < 100) {
                 socket.emit("error", "IP_JOIN_RATE_LIMITED");
                 return;
             }
