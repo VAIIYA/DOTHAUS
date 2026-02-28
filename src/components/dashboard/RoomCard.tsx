@@ -2,7 +2,12 @@
 
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useCallback, useState } from "react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+    () => import("@solana/wallet-adapter-react-ui").then((mod) => mod.WalletMultiButton),
+    { ssr: false }
+);
 import { isRoomJoinable } from "@/lib/game/room-status";
 import { Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 

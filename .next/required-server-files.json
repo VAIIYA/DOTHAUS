@@ -100,7 +100,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/meneergroot/GITHUB/DOTHAUS",
+    "outputFileTracingRoot": "/Users/meneergroot/Github/DOTHAUS",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -293,11 +293,11 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/meneergroot/GITHUB/DOTHAUS"
+      "root": "/Users/meneergroot/Github/DOTHAUS"
     },
     "distDirRoot": ".next"
   },
-  "appDir": "/Users/meneergroot/GITHUB/DOTHAUS",
+  "appDir": "/Users/meneergroot/Github/DOTHAUS",
   "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",

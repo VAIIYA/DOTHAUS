@@ -57,6 +57,30 @@ class GameRoom {
         this.winnerName = null;
         this.queuedPlayers = {};
         this.initEntities();
+
+        // Spawn the DVD bouncing bot
+        this.botId = `dvd_bot_${Math.random().toString(36).substr(2, 9)}`;
+        this.addBotPlayer();
+    }
+
+    addBotPlayer() {
+        // Initialize bot as a player with fixed velocity and no specific target
+        this.players[this.botId] = {
+            id: this.botId,
+            name: "Bouncing Bot",
+            walletAddress: null,
+            color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+            fragments: [{
+                ...this.createSpawnFragment(0),
+                vx: 3, // initial velocity
+                vy: 3,
+                mass: 20 // start slightly bigger so it lasts longer
+            }],
+            target: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 }, // Target ignored for bots
+            socket: { id: this.botId, emit: () => { } }, // Mock socket
+            isBot: true
+        };
+        this.updatePlayerStats(this.botId);
     }
 
     initEntities() {
@@ -298,26 +322,57 @@ class GameRoom {
         const playerList = Object.values(this.players);
         playerList.forEach((player) => {
             player.fragments.forEach((frag, idx) => {
-                // Physics
-                frag.x += frag.vx;
-                frag.y += frag.vy;
-                frag.vx *= 0.85;
-                frag.vy *= 0.85;
+                if (player.isBot) {
+                    // Bot logic: constant velocity, bounce off walls
+                    const currentSpeed = Math.sqrt(frag.vx * frag.vx + frag.vy * frag.vy);
+                    if (currentSpeed < 1) {
+                        // Kickstart if it slows down too much
+                        frag.vx = (Math.random() > 0.5 ? 1 : -1) * 3;
+                        frag.vy = (Math.random() > 0.5 ? 1 : -1) * 3;
+                    }
 
-                const dx = player.target.x - frag.x;
-                const dy = player.target.y - frag.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                    // Don't apply friction to bots so they keep moving
+                    frag.x += frag.vx;
+                    frag.y += frag.vy;
 
-                if (distance > 1) {
-                    // Agario speed-mass inverse curve
-                    const speed = 12 * Math.pow(frag.mass, -0.439);
-                    frag.x += (dx / distance) * Math.max(0.5, speed);
-                    frag.y += (dy / distance) * Math.max(0.5, speed);
+                    // Bounce mechanics
+                    if (frag.x - frag.radius <= 0) {
+                        frag.x = frag.radius;
+                        frag.vx = Math.abs(frag.vx); // Bounce right
+                    } else if (frag.x + frag.radius >= MAP_WIDTH) {
+                        frag.x = MAP_WIDTH - frag.radius;
+                        frag.vx = -Math.abs(frag.vx); // Bounce left
+                    }
+
+                    if (frag.y - frag.radius <= 0) {
+                        frag.y = frag.radius;
+                        frag.vy = Math.abs(frag.vy); // Bounce down
+                    } else if (frag.y + frag.radius >= MAP_HEIGHT) {
+                        frag.y = MAP_HEIGHT - frag.radius;
+                        frag.vy = -Math.abs(frag.vy); // Bounce up
+                    }
+                } else {
+                    // Normal player physics
+                    frag.x += frag.vx;
+                    frag.y += frag.vy;
+                    frag.vx *= 0.85;
+                    frag.vy *= 0.85;
+
+                    const dx = player.target.x - frag.x;
+                    const dy = player.target.y - frag.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 1) {
+                        // Agario speed-mass inverse curve
+                        const speed = 12 * Math.pow(frag.mass, -0.439);
+                        frag.x += (dx / distance) * Math.max(0.5, speed);
+                        frag.y += (dy / distance) * Math.max(0.5, speed);
+                    }
+
+                    // Bounds
+                    frag.x = Math.max(0, Math.min(MAP_WIDTH, frag.x));
+                    frag.y = Math.max(0, Math.min(MAP_HEIGHT, frag.y));
                 }
-
-                // Bounds
-                frag.x = Math.max(0, Math.min(MAP_WIDTH, frag.x));
-                frag.y = Math.max(0, Math.min(MAP_HEIGHT, frag.y));
 
                 // Merge fragments
                 player.fragments.forEach((otherFrag, oIdx) => {
@@ -384,9 +439,10 @@ class GameRoom {
             this.updatePlayerStats(player.id);
         });
 
-        // Check for WINNER only in Arena rooms
-        if (this.id !== "0" && this.status === "ACTIVE" && Object.keys(this.players).length === 1) {
-            this.endMatch(Object.keys(this.players)[0]);
+        // Check for WINNER only in Arena rooms (ignore bots for calculating winner if there is only one human left)
+        const humanPlayers = playerList.filter(p => !p.isBot);
+        if (this.id !== "0" && this.status === "ACTIVE" && humanPlayers.length === 1) {
+            this.endMatch(humanPlayers[0].id);
         }
     }
 
@@ -427,11 +483,25 @@ class GameRoom {
                 if (!respawnPlayer) return;
 
                 respawnPlayer.fragments = [this.createSpawnFragment(0)];
-                respawnPlayer.target = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+                if (respawnPlayer.isBot) {
+                    respawnPlayer.fragments[0].vx = 3;
+                    respawnPlayer.fragments[0].vy = 3;
+                    respawnPlayer.fragments[0].mass = 20;
+                } else {
+                    respawnPlayer.target = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+                }
                 this.updatePlayerStats(id);
             }, 2000);
         } else {
             delete this.players[id];
+            // If it was the bot, respawn it after a delay even in an arena room
+            if (player.isBot && this.status === "ACTIVE") {
+                setTimeout(() => {
+                    if (this.status === "ACTIVE") {
+                        this.addBotPlayer();
+                    }
+                }, 4000);
+            }
         }
 
         // Final report of stats
@@ -499,6 +569,7 @@ class GameRoom {
             this.status = "WAITING";
         }
         this.initEntities();
+        this.addBotPlayer();
 
         const queuedSocketIds = Object.keys(this.queuedPlayers);
         if (queuedSocketIds.length > 0) {
